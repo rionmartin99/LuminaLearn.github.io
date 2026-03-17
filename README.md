@@ -1,2 +1,2 @@
-# rionquiz.github.io
-This is where the quizzes/exams will show up.
+# LuminaLearn.github.io
+This is where rion's learning modules will show up.
