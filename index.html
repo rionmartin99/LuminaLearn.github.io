@@ -1,10 +1,10 @@
 <!--
 Change Log:
+v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using Dynamic Viewport Height (100dvh) and Safe Area Insets (.pb-safe).
 v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run calls (Monitoring Audit, Document Viewer, confirmSubmission) for 100% standalone support.
 v1.8.0 - 2026-03-17 09:56 AM: [NEW] Fully standalone support with BackEndService bridge and dynamic API URL config.
 v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no state-locks) to bypass GAS environment interference.
 v1.7.2 - 2026-03-17 04:36 AM: [FIX] Final camera stabilization: Explicit .play() on metadata load + refined error logging (External Source).
-v1.7.1 - 2026-03-17 04:33 AM: [FIX] Adapted adaptive camera logic from MonitoringLumina.html (facingMode: 'user' + 1s stabilization delay).
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -181,10 +181,15 @@ v1.7.1 - 2026-03-17 04:33 AM: [FIX] Adapted adaptive camera logic from Monitorin
         .animate-ripple {
             animation: ripple 2s infinite;
         }
+
+        /* Safe area padding for mobile navigation */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
     </style>
 </head>
 
-<body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
+<body class="text-slate-800 antialiased h-[100dvh] flex flex-col overflow-hidden">
 
     <!-- TOP BAR -->
     <header class="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 shrink-0 z-20">
