@@ -1,10 +1,10 @@
 <!--
 Change Log:
+v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added readyState check + explicit play() to fix black heartbeat snapshots.
 v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using Dynamic Viewport Height (100dvh) and Safe Area Insets (.pb-safe).
 v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run calls (Monitoring Audit, Document Viewer, confirmSubmission) for 100% standalone support.
 v1.8.0 - 2026-03-17 09:56 AM: [NEW] Fully standalone support with BackEndService bridge and dynamic API URL config.
 v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no state-locks) to bypass GAS environment interference.
-v1.7.2 - 2026-03-17 04:36 AM: [FIX] Final camera stabilization: Explicit .play() on metadata load + refined error logging (External Source).
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -446,6 +446,9 @@ v1.7.2 - 2026-03-17 04:36 AM: [FIX] Final camera stabilization: Explicit .play()
                     this.state.video.autoplay = true;
                     this.state.video.playsInline = true;
                     
+                    // Explicitly call play and handle potential blocks
+                    await this.state.video.play().catch(e => console.warn("[Monitor] Play failed:", e));
+                    
                     this.log('System', 'Optical Heartbeat', 'Camera Stream Active');
 
                     // 1s delay allows camera hardware to expose/focus correctly (from MonitoringLumina.html)
@@ -490,7 +493,11 @@ v1.7.2 - 2026-03-17 04:36 AM: [FIX] Final camera stabilization: Explicit .play()
                             this.log('State', 'Tab Focused', `Student returned after ${duration}s`);
                         }
                     },
-                    copy: () => this.log('Clipboard', 'Content Copied', 'To Clipboard'),
+                    copy: () => {
+                        const text = window.getSelection().toString();
+                        const preview = text.length > 30 ? text.substring(0, 30) + '...' : text;
+                        this.log('Clipboard', 'Content Copied', preview ? `"${preview}"` : 'To Clipboard');
+                    },
                     paste: (e) => {
                         let content = (e.clipboardData || window.clipboardData).getData('text');
                         let preview = content.length > 30 ? content.substring(0, 30) + '...' : content;
@@ -541,6 +548,12 @@ v1.7.2 - 2026-03-17 04:36 AM: [FIX] Final camera stabilization: Explicit .play()
                 canvas.height = (this.state.video.videoHeight / this.state.video.videoWidth) * 320 || 240;
                 
                 if (canvas.width === 0) return;
+                
+                // Ensure video is ready to be drawn (HAVE_CURRENT_DATA or better)
+                if (this.state.video.readyState < 2) {
+                    console.log("[Monitor] Video not ready for snapshot");
+                    return;
+                }
                 
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(this.state.video, 0, 0, canvas.width, canvas.height);
