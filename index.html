@@ -2548,12 +2548,12 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                 grade: entry.grade || '-',
                                 section: entry.section || '-',
                                 group: entry.group || '', // Include Group
-                                status: entry.app === true || entry.app === 'completed' || entry.app === 'true' || entry.appGrade !== null ? 'Completed' : 'Pending',
-                                photo: (typeof entry.app === 'string' && entry.app.startsWith('data:image')) ? entry.app : null,
+                                status: entry.app === true || entry.app === 'completed' || entry.app === 'true' || entry.app === 'submitted_offline' || entry.appGrade !== null ? 'Completed' : 'Pending',
+                                photo: (typeof entry.app === 'string' && (entry.app.startsWith('data:image') || entry.app.startsWith('['))) ? entry.app : null,
                                 date: entry.timestamp || 0
                             };
 
-                            if (entry.app === 'pending' || (typeof entry.app === 'string' && entry.app.startsWith('data:image') && entry.appGrade === null)) {
+                            if (entry.app === 'pending' || (typeof entry.app === 'string' && (entry.app.startsWith('data:image') || entry.app.startsWith('[')) && entry.appGrade === null) || (entry.app === 'submitted_offline' && entry.appGrade === null)) {
                                 pendingRows.push(row);
                             } else {
                                 historyRows.push(row);
@@ -2598,8 +2598,8 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                                                 <div class="text-xs text-slate-400 font-normal">${r.grade} - ${r.section}</div>
                                                                 ${r.group ? `<div class="text-[10px] text-slate-400 font-mono bg-slate-100 inline-block px-1 rounded mt-0.5">${r.group}</div>` : ''}
                                                             </td>
-                                                            <td class="px-4 py-3">
-                                                                ${r.photo ? `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-12 w-20 object-cover rounded shadow-sm border border-slate-200 cursor-pointer hover:scale-105 transition-transform" title="Click to enlarge">` : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
+                                                            <td class="px-4 py-3 max-w-[200px] flex flex-wrap gap-1">
+                                                                ${r.photo ? (r.photo.startsWith('[') ? (() => { try { return JSON.parse(r.photo).map(url => `<img src="${url}" onclick="window.open('${url}')" class="h-12 w-20 object-cover rounded shadow-sm border border-slate-200 cursor-pointer hover:scale-105 transition-transform" title="Click to enlarge">`).join(''); } catch(e) { return '<span class="text-xs text-red-400">Error loading array</span>'; } })() : `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-12 w-20 object-cover rounded shadow-sm border border-slate-200 cursor-pointer hover:scale-105 transition-transform" title="Click to enlarge">`) : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
                                                             </td>
                                                             <td class="px-4 py-3 text-right flex items-center justify-end gap-2">
                                                                 <input type="number" id="grade-${r.id}" placeholder="Grade %" class="w-20 p-1.5 text-xs rounded border border-slate-200 focus:border-brand-500 focus:outline-none" min="0" max="100">
@@ -2626,8 +2626,8 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                                                 <div class="text-xs text-slate-400 font-normal">${r.grade} - ${r.section}</div>
                                                                 ${r.group ? `<div class="text-[10px] text-slate-400 font-mono bg-slate-100 inline-block px-1 rounded mt-0.5">${r.group}</div>` : ''}
                                                             </td>
-                                                            <td class="px-4 py-3">
-                                                                ${r.photo ? `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-10 w-16 object-cover rounded shadow-sm border border-slate-200 cursor-pointer" title="Click to enlarge">` : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
+                                                            <td class="px-4 py-3 max-w-[150px] flex flex-wrap gap-1">
+                                                                ${r.photo ? (r.photo.startsWith('[') ? (() => { try { return JSON.parse(r.photo).map(url => `<img src="${url}" onclick="window.open('${url}')" class="h-10 w-16 object-cover rounded shadow-sm border border-slate-200 cursor-pointer" title="Click to enlarge">`).join(''); } catch(e) { return '<span class="text-xs text-red-400">Error loading array</span>'; } })() : `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-10 w-16 object-cover rounded shadow-sm border border-slate-200 cursor-pointer" title="Click to enlarge">`) : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
                                                             </td>
                                                             <td class="px-4 py-3 text-right">
                                                                 <span class="text-green-600 text-xs font-bold flex items-center justify-end gap-1">
@@ -3180,9 +3180,7 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                     if (!isTeacher && step === 'app' && status === 'pending') {
                         app.handlers.showStudentDetailsModal(modId, (details) => {
                             // On Confirm, submit with details
-                            // Note: submitProgress uses app.state.studentInfo, which we updated in the modal.
-                            // But also passing it explicitly is safer if supported.
-                            const photoVal = details.activityPhoto || 'pending';
+                            const photoVal = details.activityPhoto || 'submitted_offline';
                             DataService.submitProgress(modId, step, photoVal, details, null, () => {
                                 app.refreshData();
                                 app.showToast('Activity Submitted!', 'success');
@@ -4025,13 +4023,13 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                 </div>
                                 
                                 <div class="mt-4 p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 relative group hover:border-brand-500 transition-colors">
-                                    <input type="file" id="activityPhotoInput" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" required>
+                                    <input type="file" id="activityPhotoInput" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" multiple>
                                     <div class="flex flex-col items-center justify-center text-slate-500 group-hover:text-brand-600 pointer-events-none" id="photoUploadUI">
-                                        <i class="ph-bold ph-camera text-3xl mb-2"></i>
-                                        <span class="text-sm font-bold block text-center">Take Activity Photo</span>
-                                        <span class="text-[10px] text-center mt-1 px-4 leading-tight">Must upload an image of your completed sheet</span>
+                                        <i class="ph-bold ph-images text-3xl mb-2"></i>
+                                        <span class="text-sm font-bold block text-center">Upload Activity Photos (Optional)</span>
+                                        <span class="text-[10px] text-center mt-1 px-4 leading-tight">Upload up to 5 images of your completed sheet</span>
                                     </div>
-                                    <img id="photoPreview" class="hidden w-full h-32 object-contain rounded-lg pointer-events-none mt-2">
+                                    <div id="photoPreviewContainer" class="hidden grid grid-cols-5 gap-2 mt-2 pointer-events-none"></div>
                                 </div>
                                 
                                 <div class="flex gap-3 pt-4 border-t border-slate-100 mt-6">
@@ -4046,69 +4044,105 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                     modal.classList.remove('hidden');
 
                     const photoInput = document.getElementById('activityPhotoInput');
-                    const photoPreview = document.getElementById('photoPreview');
+                    const photoPreviewContainer = document.getElementById('photoPreviewContainer');
                     const photoUploadUI = document.getElementById('photoUploadUI');
-                    let compressedImageBase64 = null;
+                    let compressedImageBase64Array = [];
 
-                    photoInput.addEventListener('change', (e) => {
-                        const file = e.target.files[0];
-                        if (!file) {
-                            photoPreview.classList.add('hidden');
+                    photoInput.addEventListener('change', async (e) => {
+                        const files = Array.from(e.target.files);
+                        if (!files || files.length === 0) {
+                            photoPreviewContainer.classList.add('hidden');
+                            photoPreviewContainer.innerHTML = '';
                             photoUploadUI.classList.remove('hidden');
-                            compressedImageBase64 = null;
+                            compressedImageBase64Array = [];
                             return;
                         }
 
-                        photoUploadUI.innerHTML = '<div class="spinner w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><span class="text-xs font-bold text-slate-500 block text-center">Optimizing Image...</span>';
+                        if (files.length > 5) {
+                            app.showToast('You can only upload up to 5 images.', 'error');
+                            e.target.value = ''; // Reset input
+                            return;
+                        }
 
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const img = new Image();
-                            img.onload = () => {
-                                const canvas = document.createElement('canvas');
-                                const MAX_WIDTH = 800;
-                                let width = img.width;
-                                let height = img.height;
+                        photoUploadUI.innerHTML = '<div class="spinner w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><span class="text-xs font-bold text-slate-500 block text-center">Optimizing Images...</span>';
+                        
+                        compressedImageBase64Array = [];
+                        photoPreviewContainer.innerHTML = '';
+                        photoPreviewContainer.classList.remove('hidden');
 
-                                if (width > MAX_WIDTH) {
-                                    height = Math.round((height * MAX_WIDTH) / width);
-                                    width = MAX_WIDTH;
-                                }
+                        for (let file of files) {
+                            try {
+                                const base64 = await new Promise((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        const img = new Image();
+                                        img.onload = () => {
+                                            const canvas = document.createElement('canvas');
+                                            const MAX_WIDTH = 800;
+                                            let width = img.width;
+                                            let height = img.height;
 
-                                canvas.width = width;
-                                canvas.height = height;
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0, width, height);
+                                            if (width > MAX_WIDTH) {
+                                                height = Math.round((height * MAX_WIDTH) / width);
+                                                width = MAX_WIDTH;
+                                            }
 
-                                compressedImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                                            canvas.width = width;
+                                            canvas.height = height;
+                                            const ctx = canvas.getContext('2d');
+                                            ctx.drawImage(img, 0, 0, width, height);
+
+                                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                                        };
+                                        img.src = event.target.result;
+                                    };
+                                    reader.readAsDataURL(file);
+                                });
                                 
-                                photoPreview.src = compressedImageBase64;
-                                photoPreview.classList.remove('hidden');
-                                photoUploadUI.classList.add('hidden');
-                            };
-                            img.src = event.target.result;
-                        };
-                        reader.readAsDataURL(file);
+                                compressedImageBase64Array.push(base64);
+
+                                const imgEl = document.createElement('img');
+                                imgEl.src = base64;
+                                imgEl.className = 'w-full h-16 object-cover rounded-md shadow-sm border border-slate-200';
+                                photoPreviewContainer.appendChild(imgEl);
+
+                            } catch (err) {
+                                console.error("Error optimizing image:", err);
+                            }
+                        }
+
+                        photoUploadUI.classList.add('hidden');
+                        
+                        // Restore UI text inside upload div (though it is transparent behind the standard input)
+                        photoUploadUI.innerHTML = `
+                            <i class="ph-bold ph-images text-3xl mb-2"></i>
+                            <span class="text-sm font-bold block text-center">Upload Activity Photos (Optional)</span>
+                            <span class="text-[10px] text-center mt-1 px-4 leading-tight">Upload up to 5 images of your completed sheet</span>
+                        `;
                     });
 
                     document.getElementById('studentDetailsForm').onsubmit = (e) => {
                         e.preventDefault();
-                        if (!compressedImageBase64) {
-                            app.showToast('Please take or upload an activity photo.', 'error');
-                            return;
-                        }
 
                         const btn = document.getElementById('submitActivityBtn');
                         btn.disabled = true;
                         btn.innerHTML = '<div class="spinner w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
 
                         const fd = new FormData(e.target);
+                        
+                        let photoData = null;
+                        if (compressedImageBase64Array.length > 0) {
+                            photoData = JSON.stringify(compressedImageBase64Array);
+                        } else {
+                            photoData = 'submitted_offline';
+                        }
+
                         const newInfo = {
                             name: fd.get('name'),
                             grade: fd.get('grade'),
                             section: fd.get('section'),
                             group: fd.get('group'),
-                            activityPhoto: compressedImageBase64
+                            activityPhoto: photoData
                         };
                         
                         if (!app.state.studentInfo) {
