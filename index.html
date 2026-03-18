@@ -1487,7 +1487,7 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                     
                                     DataService.recoverAccountStep2(data.userId, fd.get('answer'), (res) => {
                                         if (res.success) {
-                                            renderRecoveryStep(3, { username: res.username, password: res.password });
+                                            renderRecoveryStep(3, { userId: res.userId, username: res.username, password: res.password });
                                         } else {
                                             btn.disabled = false;
                                             btn.innerHTML = 'Verify Identity';
@@ -1498,7 +1498,7 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
 
                             } else if (step === 3) {
                                 // Provide fallback if legacy account has no username yet
-                                const dispUn = data.username ? data.username : '<span class="italic text-slate-400">Not set yet</span>';
+                                const dispUn = data.username ? data.username : data.userId;
                                 
                                 container.innerHTML = `
                                     <div class="text-center mb-6">
@@ -1759,7 +1759,7 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
 
                     // Status Helpers
                     const isAppDone = prog.app === true || prog.app === 'true' || prog.app === 'completed' || prog.score !== null;
-                    const isAppPending = prog.app === 'pending' || (typeof prog.app === 'string' && prog.app.startsWith('data:image') && prog.score === null);
+                    const isAppPending = prog.app === 'pending' || prog.app === 'submitted_offline' || (typeof prog.app === 'string' && (prog.app.startsWith('data:image') || prog.app.startsWith('[')) && prog.score === null);
 
                     const wrap = document.createElement('div');
                     wrap.className = "min-h-full bg-white flex flex-col fade-in";
@@ -1860,7 +1860,7 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                     if (isTeacher) {
                         Object.values(allProg).forEach(u => {
                             const pApp = u[id] ? u[id].app : null;
-                            if (pApp === 'pending' || (typeof pApp === 'string' && pApp.startsWith('data:image') && u[id].score === null)) pendingCount++;
+                            if (pApp === 'pending' || pApp === 'submitted_offline' || (typeof pApp === 'string' && (pApp.startsWith('data:image') || pApp.startsWith('[')) && u[id].score === null)) pendingCount++;
                         });
                     }
 
