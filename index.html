@@ -811,9 +811,27 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                 }
             },
 
-            async resetPassword(firstName, lastName, grade, section, newPassword, callback) {
+            async updateSecretQuestion(userId, question, answer, callback) {
                 try {
-                    const res = await BackEndService.call('resetPassword', [firstName, lastName, grade, section, newPassword]);
+                    const res = await BackEndService.call('updateSecretQuestion', [userId, question, answer]);
+                    callback(res);
+                } catch (err) {
+                    callback({ success: false, error: err });
+                }
+            },
+
+            async recoverAccountStep1(firstName, lastName, grade, section, studentId, callback) {
+                try {
+                    const res = await BackEndService.call('recoverAccountStep1', [firstName, lastName, grade, section, studentId]);
+                    callback(res);
+                } catch (err) {
+                    callback({ success: false, error: err });
+                }
+            },
+            
+            async recoverAccountStep2(userId, answer, callback) {
+                try {
+                    const res = await BackEndService.call('recoverAccountStep2', [userId, answer]);
                     callback(res);
                 } catch (err) {
                     callback({ success: false, error: err });
@@ -1338,87 +1356,181 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                         }, 0);
                     }
 
-                    // FORGOT PASSWORD VIEW
+                    // ACCOUNT RECOVERY VIEW
                     if (app.state.authMode === 'forgot') {
+                        // We will use local state for the wizard steps
                         wrap.innerHTML = `
-                            <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 border border-slate-100">
-                                <div class="text-center mb-6">
-                                    <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-sm">
-                                        <i class="ph-bold ph-key text-amber-600 text-2xl"></i>
-                                    </div>
-                                    <h2 class="text-2xl font-black text-slate-900">Reset Password</h2>
-                                    <p class="text-slate-500 text-sm mt-1">Enter your details to verify your identity</p>
-                                </div>
-                                <form id="forgotForm" class="space-y-4">
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">First Name</label>
-                                            <input type="text" name="firstName" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Last Name</label>
-                                            <input type="text" name="lastName" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Grade</label>
-                                            <select name="grade" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white">
-                                                <option value="" disabled selected>Select</option>
-                                                <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
-                                            <input type="text" name="section" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                        </div>
-                                    </div>
-                                    <div class="pt-2 border-t border-slate-100">
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
-                                        <input type="password" name="newPassword" required minlength="6" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm New Password</label>
-                                        <input type="password" name="confirmPassword" required minlength="6" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                    </div>
-                                    <button type="submit" id="forgotBtn" class="w-full bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-amber-500/30 hover:bg-amber-700 transition-all mt-4">
-                                        Reset Password
-                                    </button>
-                                </form>
-                                <p class="text-center text-sm text-slate-500 mt-6 font-medium">
-                                    Remember your password? <button onclick="app.state.authMode='login'; app.render();" class="text-brand-600 hover:text-brand-800 font-bold ml-1">Log In</button>
-                                </p>
+                            <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 border border-slate-100" id="recoveryContainer">
+                                <!-- Wizard content injected here via JS -->
                             </div>
                         `;
 
-                        setTimeout(() => {
-                            document.getElementById('forgotForm').onsubmit = (e) => {
-                                e.preventDefault();
-                                const fd = new FormData(e.target);
-                                if (fd.get('newPassword') !== fd.get('confirmPassword')) {
-                                    app.showToast("Passwords do not match.", "error");
-                                    return;
-                                }
-                                const btn = document.getElementById('forgotBtn');
-                                btn.disabled = true;
-                                btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Verifying...';
+                        // Helper to render the recovery wizard steps
+                        const renderRecoveryStep = (step, data = {}) => {
+                            const container = wrap.querySelector('#recoveryContainer');
+                            if (step === 1) {
+                                container.innerHTML = `
+                                    <div class="text-center mb-6">
+                                        <div class="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center mx-auto mb-4 border border-brand-100 shadow-sm">
+                                            <i class="ph-bold ph-magnifying-glass text-brand-600 text-2xl"></i>
+                                        </div>
+                                        <h2 class="text-2xl font-black text-slate-900">Account Recovery</h2>
+                                        <p class="text-slate-500 text-sm mt-1">Find your account to recover access.</p>
+                                    </div>
+                                    <form id="recoveryForm1" class="space-y-4">
+                                        <div class="p-3 bg-blue-50 text-blue-700 text-xs rounded-xl flex gap-2 items-start">
+                                            <i class="ph-fill ph-info text-base"></i>
+                                            <span>Enter your Student ID <b>OR</b> your full name and section.</span>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Student ID (Optional)</label>
+                                            <input type="text" name="studentId" placeholder="e.g. LUM-1234" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        </div>
+                                        <div class="relative flex py-2 items-center">
+                                            <div class="flex-grow border-t border-slate-200"></div>
+                                            <span class="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold uppercase">OR</span>
+                                            <div class="flex-grow border-t border-slate-200"></div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">First Name</label>
+                                                <input type="text" name="firstName" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Last Name</label>
+                                                <input type="text" name="lastName" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Grade</label>
+                                                <select name="grade" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white">
+                                                    <option value="" disabled selected>Select</option>
+                                                    <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
+                                                <input type="text" name="section" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="submit" id="btnStep1" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-500/30 hover:bg-brand-700 transition-all mt-4">
+                                            Find Account
+                                        </button>
+                                    </form>
+                                    <p class="text-center text-sm text-slate-500 mt-6 font-medium">
+                                        Remember your login? <button onclick="app.state.authMode='login'; app.render();" class="text-brand-600 hover:text-brand-800 font-bold ml-1">Log In</button>
+                                    </p>
+                                `;
 
-                                DataService.resetPassword(
-                                    fd.get('firstName'), fd.get('lastName'), fd.get('grade'), fd.get('section'), fd.get('newPassword'),
-                                    (res) => {
-                                        btn.disabled = false;
-                                        btn.innerHTML = 'Reset Password';
-                                        if (res.success) {
-                                            app.showToast("Password reset successful! You can now log in.", "success");
-                                            app.state.authMode = 'login';
-                                            app.render();
-                                        } else {
-                                            app.showToast("Failed: " + res.error, "error");
+                                document.getElementById('recoveryForm1').onsubmit = (e) => {
+                                    e.preventDefault();
+                                    const fd = new FormData(e.target);
+                                    const btn = document.getElementById('btnStep1');
+                                    btn.disabled = true;
+                                    btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Searching...';
+                                    
+                                    DataService.recoverAccountStep1(
+                                        fd.get('firstName'), fd.get('lastName'), fd.get('grade'), fd.get('section'), fd.get('studentId'),
+                                        (res) => {
+                                            if (res.success) {
+                                                if (res.hasQuestion) {
+                                                    renderRecoveryStep(2, { userId: res.userId, question: res.question });
+                                                } else {
+                                                    // Legacy bypass if no security question exists yet
+                                                    renderRecoveryStep(3, { username: res.username, password: res.password });
+                                                }
+                                            } else {
+                                                btn.disabled = false;
+                                                btn.innerHTML = 'Find Account';
+                                                app.showToast(res.error, "error");
+                                            }
                                         }
-                                    }
-                                );
-                            };
-                        }, 0);
+                                    );
+                                };
+
+                            } else if (step === 2) {
+                                container.innerHTML = `
+                                    <div class="text-center mb-6">
+                                        <div class="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center mx-auto mb-4 border border-rose-100 shadow-sm">
+                                            <i class="ph-bold ph-lock-key text-rose-600 text-2xl"></i>
+                                        </div>
+                                        <h2 class="text-2xl font-black text-slate-900">Security Check</h2>
+                                        <p class="text-slate-500 text-sm mt-1">Answer your secret question to proceed.</p>
+                                    </div>
+                                    <form id="recoveryForm2" class="space-y-4">
+                                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Your Secret Question</p>
+                                            <p class="text-brand-700 font-bold">"${data.question}"</p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Your Answer</label>
+                                            <input type="text" name="answer" required placeholder="Type your answer here..." class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        </div>
+                                        
+                                        <button type="submit" id="btnStep2" class="w-full bg-rose-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-rose-500/30 hover:bg-rose-700 transition-all mt-4">
+                                            Verify Identity
+                                        </button>
+                                        <button type="button" onclick="app.state.authMode='login'; app.render();" class="w-full bg-slate-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-all mt-2">
+                                            Cancel
+                                        </button>
+                                    </form>
+                                `;
+
+                                document.getElementById('recoveryForm2').onsubmit = (e) => {
+                                    e.preventDefault();
+                                    const fd = new FormData(e.target);
+                                    const btn = document.getElementById('btnStep2');
+                                    btn.disabled = true;
+                                    btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Verifying...';
+                                    
+                                    DataService.recoverAccountStep2(data.userId, fd.get('answer'), (res) => {
+                                        if (res.success) {
+                                            renderRecoveryStep(3, { username: res.username, password: res.password });
+                                        } else {
+                                            btn.disabled = false;
+                                            btn.innerHTML = 'Verify Identity';
+                                            app.showToast(res.error, "error");
+                                        }
+                                    });
+                                };
+
+                            } else if (step === 3) {
+                                // Provide fallback if legacy account has no username yet
+                                const dispUn = data.username ? data.username : '<span class="italic text-slate-400">Not set yet</span>';
+                                
+                                container.innerHTML = `
+                                    <div class="text-center mb-6">
+                                        <div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100 shadow-sm shadow-emerald-500/20">
+                                            <i class="ph-bold ph-check text-emerald-500 text-3xl"></i>
+                                        </div>
+                                        <h2 class="text-2xl font-black text-slate-900">Account Recovered!</h2>
+                                        <p class="text-slate-500 text-sm mt-1">Here is your login information.</p>
+                                    </div>
+                                    <div class="space-y-4 mb-6">
+                                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+                                            <div class="text-lg font-bold text-slate-900 break-words">${dispUn}</div>
+                                        </div>
+                                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl relative group">
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+                                            <div class="text-lg font-bold text-slate-900 break-words">${data.password}</div>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex gap-2 items-start mb-6">
+                                        <i class="ph-fill ph-warning text-base flex-shrink-0"></i>
+                                        <span>Please save this information somewhere safe. We recommend changing your password after you log in.</span>
+                                    </div>
+                                    <button onclick="app.state.authMode='login'; app.render();" class="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-500/30 hover:bg-emerald-700 transition-all">
+                                        Go to Login
+                                    </button>
+                                `;
+                            }
+                        };
+
+                        // Start wizard on next tick
+                        setTimeout(() => renderRecoveryStep(1), 0);
                     }
 
                     return wrap;
@@ -2182,6 +2294,43 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                 </button>
                             </form>
                         </div>
+
+                        <!-- SECURITY SETTINGS -->
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                                    <i class="ph-bold ph-shield-check text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-800">Account Recovery</h3>
+                                    <p class="text-[10px] text-slate-500 leading-tight mt-1">Set a secret question and answer to recover your account if you forget your username and password.</p>
+                                </div>
+                            </div>
+                            <form id="securityForm" class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Secret Question</label>
+                                    <select name="question" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        <option value="" disabled selected>Select a question...</option>
+                                        <option value="What is the name of your first pet?">What is the name of your first pet?</option>
+                                        <option value="In what city were you born?">In what city were you born?</option>
+                                        <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                                        <option value="What was the name of your elementary school?">What was the name of your elementary school?</option>
+                                        <option value="What is your favorite book?">What is your favorite book?</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Your Answer</label>
+                                    <input type="text" name="answer" required placeholder="Type your answer here..." class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                </div>
+                                <div class="p-2 bg-amber-50 text-amber-800 text-[10px] rounded flex gap-2 items-start">
+                                    <i class="ph-fill ph-info text-xs"></i>
+                                    <span>Make sure you remember this exact answer.</span>
+                                </div>
+                                <button type="submit" id="securityBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-xl hover:bg-amber-700 transition-all mt-2">
+                                    Save Security Question
+                                </button>
+                            </form>
+                        </div>
                     `;
 
                     // Load progress from backend
@@ -2246,6 +2395,27 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                 }
                             });
                         };
+
+                        // Security form handler
+                        document.getElementById('securityForm').onsubmit = (e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target);
+                            const btn = document.getElementById('securityBtn');
+                            btn.disabled = true;
+                            btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Saving...';
+                            
+                            DataService.updateSecretQuestion(app.state.userId, fd.get('question'), fd.get('answer'), (res) => {
+                                btn.disabled = false;
+                                btn.innerHTML = 'Save Security Question';
+                                if (res.success) {
+                                    app.showToast("Security question saved successfully!", "success");
+                                    e.target.reset();
+                                } else {
+                                    app.showToast(res.error || "Failed to save security question.", "error");
+                                }
+                            });
+                        };
+
                     }, 100);
 
                     return wrap;
@@ -2794,10 +2964,29 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                                     `;
                                 }
 
+                                let timeHtml = '';
+                                if (rm.timeLog) {
+                                    const formatSecs = (s) => {
+                                        if(!s) return '0s';
+                                        if(s < 60) return s + 's';
+                                        return Math.floor(s/60) + 'm ' + (s%60) + 's';
+                                    };
+                                    timeHtml = `
+                                        <div class="mt-1 flex items-center gap-2 text-[9px] text-slate-500 font-medium bg-slate-100/50 inline-flex px-2 py-1 rounded-md border border-slate-100 uppercase tracking-wide">
+                                            <span class="flex items-center gap-1"><i class="ph-fill ph-book-open-text text-brand-500"></i> ${formatSecs(rm.timeLog['Content'])}</span>
+                                            <span class="text-slate-300">|</span>
+                                            <span class="flex items-center gap-1"><i class="ph-fill ph-pencil-simple text-blue-500"></i> ${formatSecs(rm.timeLog['Activity'])}</span>
+                                            <span class="text-slate-300">|</span>
+                                            <span class="flex items-center gap-1"><i class="ph-fill ph-check-square text-green-500"></i> ${formatSecs(rm.timeLog['Quiz'])}</span>
+                                        </div>
+                                    `;
+                                }
+
                                 return `
-                                <div class="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 gap-2">
+                                <div class="flex justify-between items-center py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 gap-2">
                                     <div class="min-w-0 flex-1">
                                         <div class="text-sm font-bold text-slate-700 truncate">${rm.moduleTitle || rm.moduleId}</div>
+                                        ${timeHtml}
                                     </div>
                                     <div class="text-right flex flex-col items-end justify-center shrink-0">
                                         ${gradeHtml}
@@ -3035,8 +3224,8 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
                     app.state.readingProgress = 0;
                     const mod = app.state.data.modules.find(m => m.id === modId);
 
-                    // Update current activity for teacher monitoring
-                    const stepLabel = type === 'content' ? 'Viewing Content' : 'Viewing Activity';
+                    // Update current activity for teacher monitoring and time logging
+                    const stepLabel = type === 'content' ? 'Content' : 'Activity';
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
@@ -3935,6 +4124,13 @@ v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run c
 
                 launchQuizInterface(modId, baselinePhoto = null, existingStream = null) {
                     const mod = app.state.data.modules.find(m => m.id === modId);
+                    
+                    app.state.currentActivity = {
+                        moduleId: modId,
+                        moduleTitle: mod ? mod.title : modId,
+                        step: 'Quiz'
+                    };
+                    
                     const modal = document.getElementById('modal-overlay');
                     modal.classList.remove('hidden');
 
