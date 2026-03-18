@@ -1,10 +1,9 @@
 <!--
 Change Log:
+v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Switches) reset when starting a new quiz session.
 v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added readyState check + explicit play() to fix black heartbeat snapshots.
 v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using Dynamic Viewport Height (100dvh) and Safe Area Insets (.pb-safe).
 v1.8.1 - 2026-03-17 10:25 AM: [FIX] Refactored all remaining google.script.run calls (Monitoring Audit, Document Viewer, confirmSubmission) for 100% standalone support.
-v1.8.0 - 2026-03-17 09:56 AM: [NEW] Fully standalone support with BackEndService bridge and dynamic API URL config.
-v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no state-locks) to bypass GAS environment interference.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -428,6 +427,17 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
 
             async start(modId, baselinePhoto = null, existingStream = null) {
                 if (this.state.active) return;
+
+                // RESET STATS FOR NEW SESSION
+                this.state.stats = {
+                    tabSwitches: 0,
+                    lastHiddenAt: null,
+                    totalHiddenTime: 0,
+                    clipboardCount: 0,
+                    snapshotCount: 0
+                };
+
+                this.state.currentModId = modId;
                 this.state.active = true;
                 this.state.moduleId = modId;
                 this.state.logs = [];
@@ -725,14 +735,14 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                 }
             },
 
-            async pingOnline(userId, activity, loginTime) {
+            async pingOnline(userId, activity, loginTime, addedHours = 0) {
                 try {
                     let actPayload = activity ? {...activity} : {};
                     if (MonitorService.state.active) {
                         actPayload.stats = MonitorService.state.stats;
                     }
                     const actStr = JSON.stringify(actPayload);
-                    await BackEndService.call('pingOnlineStatus', [userId, actStr, loginTime || '']);
+                    await BackEndService.call('pingOnlineStatus', [userId, actStr, loginTime || '', addedHours]);
                 } catch (err) {}
             },
 
@@ -928,7 +938,8 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                 // Set up intervals for real-time features
                 setInterval(() => {
                     if (this.state.userId && this.state.userMode !== 'teacher') {
-                        DataService.pingOnline(this.state.userId, this.state.currentActivity, this.state.loginTime);
+                        const addedHours = 30 / 3600; // 30 seconds
+                        DataService.pingOnline(this.state.userId, this.state.currentActivity, this.state.loginTime, addedHours);
                     } else if (this.state.userMode === 'teacher') {
                         // refresh online list if DOM exists
                         if (document.getElementById('online-students-list')) {
@@ -1118,18 +1129,18 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                     <div class="grid grid-cols-2 gap-3">
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">First Name</label>
-                                            <input type="text" name="firstName" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            <input type="text" name="firstName" required maxlength="50" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Last Name</label>
-                                            <input type="text" name="lastName" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            <input type="text" name="lastName" required maxlength="50" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                         </div>
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
                                         <div class="relative">
                                             <i class="ph ph-at absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
-                                            <input type="text" name="username" required minlength="3" placeholder="Choose a unique username" class="w-full pl-10 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors font-medium">
+                                            <input type="text" name="username" required minlength="3" maxlength="20" placeholder="Choose a unique username" class="w-full pl-10 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors font-medium">
                                         </div>
                                         <p class="text-[10px] text-slate-400 mt-1">This will be used to log in. Must be unique.</p>
                                     </div>
@@ -1143,22 +1154,22 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                         </div>
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
-                                            <input type="text" name="section" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            <input type="text" name="section" required maxlength="10" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                         </div>
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
-                                        <input type="password" name="password" required minlength="6" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        <input type="password" name="password" required minlength="6" maxlength="50" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
-                                        <input type="password" name="passwordConfirm" required minlength="6" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        <input type="password" name="passwordConfirm" required minlength="6" maxlength="50" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                     </div>
                                     <div class="pt-2 border-t border-slate-100">
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Class Code</label>
                                         <div class="relative">
                                             <i class="ph ph-key absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
-                                            <input type="text" name="classCode" required class="w-full pl-10 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors uppercase tracking-wider font-mono font-bold" placeholder="E.g. XYZ123">
+                                            <input type="text" name="classCode" required maxlength="20" class="w-full pl-10 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors uppercase tracking-wider font-mono font-bold" placeholder="E.g. XYZ123">
                                         </div>
                                         <p class="text-[10px] text-slate-400 mt-1">Get this code from your teacher.</p>
                                     </div>
@@ -1635,8 +1646,8 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                     const isTeacher = app.state.userMode === 'teacher';
 
                     // Status Helpers
-                    const isAppDone = prog.app === true || prog.app === 'true' || prog.app === 'completed';
-                    const isAppPending = prog.app === 'pending';
+                    const isAppDone = prog.app === true || prog.app === 'true' || prog.app === 'completed' || prog.score !== null;
+                    const isAppPending = prog.app === 'pending' || (typeof prog.app === 'string' && prog.app.startsWith('data:image') && prog.score === null);
 
                     const wrap = document.createElement('div');
                     wrap.className = "min-h-full bg-white flex flex-col fade-in";
@@ -1736,7 +1747,8 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                     let pendingCount = 0;
                     if (isTeacher) {
                         Object.values(allProg).forEach(u => {
-                            if (u[id] && u[id].app === 'pending') pendingCount++;
+                            const pApp = u[id] ? u[id].app : null;
+                            if (pApp === 'pending' || (typeof pApp === 'string' && pApp.startsWith('data:image') && u[id].score === null)) pendingCount++;
                         });
                     }
 
@@ -2301,7 +2313,7 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                             ${rows.map((r, i) => `
                                                 <tr class="hover:bg-slate-50">
                                                     <td class="px-4 py-3 text-slate-400 text-xs font-mono">${i + 1}</td>
-                                                    <td class="px-4 py-3 font-medium text-slate-800">${r.student}</td>
+                                                    <td class="px-4 py-3 font-medium text-slate-800 cursor-pointer hover:text-brand-600 transition-colors" onclick="app.components.showProfileModal('${r.id}')" title="View Profile">${r.student}</td>
                                                     <td class="px-4 py-3 text-slate-500 text-xs">
                                                         <div>${r.grade} - ${r.section}</div>
                                                         ${r.group ? `<div class="text-[10px] text-slate-400 font-mono bg-slate-100 inline-block px-1 rounded mt-0.5">${r.group}</div>` : ''}
@@ -2366,11 +2378,12 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                 grade: entry.grade || '-',
                                 section: entry.section || '-',
                                 group: entry.group || '', // Include Group
-                                status: entry.app === true || entry.app === 'completed' || entry.app === 'true' ? 'Completed' : 'Pending',
+                                status: entry.app === true || entry.app === 'completed' || entry.app === 'true' || entry.appGrade !== null ? 'Completed' : 'Pending',
+                                photo: (typeof entry.app === 'string' && entry.app.startsWith('data:image')) ? entry.app : null,
                                 date: entry.timestamp || 0
                             };
 
-                            if (entry.app === 'pending') {
+                            if (entry.app === 'pending' || (typeof entry.app === 'string' && entry.app.startsWith('data:image') && entry.appGrade === null)) {
                                 pendingRows.push(row);
                             } else {
                                 historyRows.push(row);
@@ -2411,16 +2424,17 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                                     ${pendingRows.map(r => `
                                                         <tr class="hover:bg-slate-50">
                                                             <td class="px-4 py-3 font-medium text-slate-800">
-                                                                <div>${r.student}</div>
+                                                                <div class="cursor-pointer hover:text-brand-600 transition-colors" onclick="app.components.showProfileModal('${r.id}')" title="View Profile">${r.student}</div>
                                                                 <div class="text-xs text-slate-400 font-normal">${r.grade} - ${r.section}</div>
                                                                 ${r.group ? `<div class="text-[10px] text-slate-400 font-mono bg-slate-100 inline-block px-1 rounded mt-0.5">${r.group}</div>` : ''}
                                                             </td>
+                                                            <td class="px-4 py-3">
+                                                                ${r.photo ? `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-12 w-20 object-cover rounded shadow-sm border border-slate-200 cursor-pointer hover:scale-105 transition-transform" title="Click to enlarge">` : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
+                                                            </td>
                                                             <td class="px-4 py-3 text-right flex items-center justify-end gap-2">
-                                                                <button onclick="app.components.showMonitoringReport('${r.id}', '${modId}')" class="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all flex items-center gap-1">
-                                                                    <i class="ph-bold ph-eye"></i> Monitor
-                                                                </button>
-                                                                <button onclick="app.handlers.confirmSubmission('${r.id}', '${modId}')" class="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-brand-700 transition-all flex items-center gap-1">
-                                                                    <i class="ph-bold ph-check"></i> Confirm
+                                                                <input type="number" id="grade-${r.id}" placeholder="Grade %" class="w-20 p-1.5 text-xs rounded border border-slate-200 focus:border-brand-500 focus:outline-none" min="0" max="100">
+                                                                <button onclick="app.handlers.gradeSubmission('${r.id}', '${modId}')" class="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-brand-700 transition-all flex items-center gap-1">
+                                                                    <i class="ph-bold ph-check"></i> Grade
                                                                 </button>
                                                             </td>
                                                         </tr>
@@ -2438,13 +2452,16 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                                     ${historyRows.map(r => `
                                                         <tr class="hover:bg-slate-50 opacity-70">
                                                             <td class="px-4 py-3 font-medium text-slate-800">
-                                                                <div>${r.student}</div>
+                                                                <div class="cursor-pointer hover:text-brand-600 transition-colors" onclick="app.components.showProfileModal('${r.id}')" title="View Profile">${r.student}</div>
                                                                 <div class="text-xs text-slate-400 font-normal">${r.grade} - ${r.section}</div>
                                                                 ${r.group ? `<div class="text-[10px] text-slate-400 font-mono bg-slate-100 inline-block px-1 rounded mt-0.5">${r.group}</div>` : ''}
                                                             </td>
+                                                            <td class="px-4 py-3">
+                                                                ${r.photo ? `<img src="${r.photo}" onclick="window.open('${r.photo}')" class="h-10 w-16 object-cover rounded shadow-sm border border-slate-200 cursor-pointer" title="Click to enlarge">` : `<span class="text-xs text-slate-400 italic">No Photo</span>`}
+                                                            </td>
                                                             <td class="px-4 py-3 text-right">
                                                                 <span class="text-green-600 text-xs font-bold flex items-center justify-end gap-1">
-                                                                    <i class="ph-bold ph-check-circle"></i> Confirmed
+                                                                    <i class="ph-bold ph-check-circle"></i> Graded
                                                                 </span>
                                                             </td>
                                                         </tr>
@@ -2702,6 +2719,143 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                             `;
                         });
                 },
+
+                // TEACHER: SHOW STUDENT PROFILE AT-A-GLANCE
+                showProfileModal(userId) {
+                    const modal = document.getElementById('modal-overlay');
+                    modal.innerHTML = `
+                        <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease]">
+                            <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-brand-50 rounded-full flex items-center justify-center text-brand-600">
+                                        <i class="ph-bold ph-user text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-slate-800 text-lg">Student Profile</h3>
+                                        <p id="profile-student-id" class="text-xs font-mono text-slate-500">Loading...</p>
+                                    </div>
+                                </div>
+                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+                                    <i class="ph-bold ph-x"></i>
+                                </button>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-6" id="profile-content">
+                                <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                                    <div class="spinner mb-4"></div>
+                                    <p>Fetching student details...</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    modal.classList.remove('hidden');
+
+                    DataService.getStudentProfile(userId, (res) => {
+                        const content = document.getElementById('profile-content');
+                        if (!res || !res.student) {
+                            content.innerHTML = `<div class="text-center py-20 text-red-500 italic">${(res && res.error) || 'Failed to load student profile.'}</div>`;
+                            return;
+                        }
+
+                        const p = res.student;
+                        const prog = res.progress || [];
+                        const name = p.firstName + ' ' + p.lastName;
+                        document.getElementById('profile-student-id').textContent = 'ID: ' + userId;
+
+                        // Format Hours
+                        const hStr = parseFloat(p.totalHoursSpent || 0).toFixed(1) + 'h';
+
+                        const regDateStr = p.registrationDate ? new Date(p.registrationDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+
+                        let recentActivityHtml = '';
+                        if (prog.length > 0) {
+                            // Map all interactive modules
+                            recentActivityHtml = prog.map(rm => {
+                                let gradeHtml = '';
+                                if (rm.score !== null && rm.appGrade !== null) {
+                                    const avg = Math.round((rm.score + rm.appGrade) / 2);
+                                    gradeHtml = `
+                                        <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: ${rm.score}% &bull; Act: ${rm.appGrade}%</div>
+                                        <div class="text-xs font-bold text-green-600 mt-0.5">${avg}% (Avg)</div>
+                                    `;
+                                } else if (rm.appGrade !== null) {
+                                    gradeHtml = `
+                                        <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: - &bull; Act: ${rm.appGrade}%</div>
+                                        <div class="text-xs font-bold text-green-600 mt-0.5">${rm.appGrade}% (Act)</div>
+                                    `;
+                                } else if (rm.score !== null) {
+                                    gradeHtml = `
+                                        <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: ${rm.score}% &bull; Act: ${rm.app ? 'Pending' : '-'}</div>
+                                        <div class="text-xs font-bold text-green-600 mt-0.5">${rm.score}% (Quiz)</div>
+                                    `;
+                                } else {
+                                    gradeHtml = `
+                                        <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: - &bull; Act: ${rm.app ? 'Pending' : '-'}</div>
+                                        <div class="text-xs font-bold text-amber-600 mt-0.5">${rm.app ? 'Submitted' : 'Started'}</div>
+                                    `;
+                                }
+
+                                return `
+                                <div class="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 gap-2">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-sm font-bold text-slate-700 truncate">${rm.moduleTitle || rm.moduleId}</div>
+                                    </div>
+                                    <div class="text-right flex flex-col items-end justify-center shrink-0">
+                                        ${gradeHtml}
+                                    </div>
+                                </div>
+                                `;
+                            }).join('');
+                        } else {
+                            recentActivityHtml = '<p class="text-xs text-slate-400 italic py-2">No activity recorded yet.</p>';
+                        }
+
+                        content.innerHTML = `
+                            <div class="flex flex-col sm:flex-row gap-6 mb-6">
+                                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-100 to-brand-50 text-brand-600 flex items-center justify-center text-3xl font-black uppercase shadow-inner shrink-0 self-center sm:self-auto border border-brand-100">
+                                    ${name.charAt(0)}
+                                </div>
+                                <div class="text-center sm:text-left flex-1">
+                                    <h2 class="text-2xl font-black text-slate-900 leading-tight">${name}</h2>
+                                    <div class="flex items-center justify-center sm:justify-start gap-2 mt-1 mb-2">
+                                        <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${p.username || 'No Username'}</span>
+                                        <span class="text-xs font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded">${p.grade}-${p.section}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500"><i class="ph-bold ph-calendar-blank mr-1"></i>Joined ${regDateStr}</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-brand-200 transition-colors">
+                                    <div class="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center text-lg shrink-0">
+                                        <i class="ph-fill ph-clock-countdown"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Time</div>
+                                        <div class="text-xl font-black text-slate-800 leading-none">${hStr}</div>
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-brand-200 transition-colors">
+                                    <div class="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center text-lg shrink-0">
+                                        <i class="ph-fill ph-check-circle"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Modules Taken</div>
+                                        <div class="text-xl font-black text-slate-800 leading-none">${prog.length}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                                <div class="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                                    <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2"><i class="ph-bold ph-list-dashes text-slate-400"></i> Module Progress</h4>
+                                </div>
+                                <div class="p-3 max-h-48 overflow-y-auto">
+                                    ${recentActivityHtml}
+                                </div>
+                            </div>
+                        `;
+                    });
+                },
             },
 
             handlers: {
@@ -2765,9 +2919,9 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                     return `
                                     <div class="py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 rounded transition-colors ${isHighRisk ? 'bg-red-50/50 border-l-2 border-l-red-500' : (st.alerts > 0 ? 'bg-red-50/20' : '')}">
                                         <div class="flex items-center justify-between mb-0.5">
-                                            <div class="font-bold text-slate-800 text-xs flex items-center gap-1">
+                                            <div class="font-bold text-slate-800 text-xs flex items-center gap-1 cursor-pointer hover:text-brand-600 transition-colors" onclick="app.components.showProfileModal('${s.userId}')" title="View Profile">
                                                 ${alertIndicator}
-                                                <span class="${isHighRisk ? 'text-red-700' : ''}">${s.name}</span>
+                                                <span class="${isHighRisk ? 'text-red-700 hover:text-red-800' : ''}">${s.name}</span>
                                             </div>
                                             <div class="text-[10px] text-slate-400">${s.grade}-${s.section}</div>
                                         </div>
@@ -2839,7 +2993,8 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                             // On Confirm, submit with details
                             // Note: submitProgress uses app.state.studentInfo, which we updated in the modal.
                             // But also passing it explicitly is safer if supported.
-                            DataService.submitProgress(modId, step, status, details, null, () => {
+                            const photoVal = details.activityPhoto || 'pending';
+                            DataService.submitProgress(modId, step, photoVal, details, null, () => {
                                 app.refreshData();
                                 app.showToast('Activity Submitted!', 'success');
                             });
@@ -2852,17 +3007,24 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                     }
                 },
 
-                confirmSubmission(userId, modId) {
-                    BackEndService.call('saveProgress', [userId, modId, 'app', 'completed', null, null])
+                gradeSubmission(userId, modId) {
+                    const gradeInput = document.getElementById(`grade-${userId}`);
+                    const score = gradeInput ? parseInt(gradeInput.value) : null;
+                    if (isNaN(score) || score < 0 || score > 100) {
+                        app.showToast("Please enter a valid percentage (0-100).", "error");
+                        return;
+                    }
+                    // Instructor sets the appGrade column independently
+                    BackEndService.call('saveProgress', [userId, modId, 'appGrade', score])
                         .then(() => {
-                            app.showToast('Submission Confirmed', 'success');
+                            app.showToast('Submission Graded', 'success');
                             app.refreshData(); // Refresh UI
                             setTimeout(() => {
                                 app.components.showActivitySubmissions(modId);
                             }, 1500); // Wait for data refresh
                         })
                         .catch(err => {
-                            app.showToast('Failed to confirm: ' + (err.message || err), 'error');
+                            app.showToast('Failed to grade: ' + (err.message || err), 'error');
                         });
                 },
 
@@ -3645,8 +3807,8 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
                         <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl animate-[scaleIn_0.3s_ease]">
-                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display">Student Details</h3>
-                            <p class="text-slate-500 mb-6 text-sm">Please confirm your details before submitting.</p>
+                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display">Activity Submission</h3>
+                            <p class="text-slate-500 mb-6 text-sm">Please provide your details and upload a photo of your activity sheet.</p>
                             
                             <form id="studentDetailsForm" class="space-y-4">
                                 <div>
@@ -3673,10 +3835,20 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                                     <input type="text" name="group" value="${info.group || ''}" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors placeholder:text-slate-300" placeholder="e.g. Group 1">
                                 </div>
                                 
+                                <div class="mt-4 p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 relative group hover:border-brand-500 transition-colors">
+                                    <input type="file" id="activityPhotoInput" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" required>
+                                    <div class="flex flex-col items-center justify-center text-slate-500 group-hover:text-brand-600 pointer-events-none" id="photoUploadUI">
+                                        <i class="ph-bold ph-camera text-3xl mb-2"></i>
+                                        <span class="text-sm font-bold block text-center">Take Activity Photo</span>
+                                        <span class="text-[10px] text-center mt-1 px-4 leading-tight">Must upload an image of your completed sheet</span>
+                                    </div>
+                                    <img id="photoPreview" class="hidden w-full h-32 object-contain rounded-lg pointer-events-none mt-2">
+                                </div>
+                                
                                 <div class="flex gap-3 pt-4 border-t border-slate-100 mt-6">
                                     <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="flex-1 bg-slate-100 text-slate-700 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-colors">Cancel</button>
-                                    <button type="submit" class="flex-1 bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all flex justify-center items-center">
-                                        Confirm & Submit <i class="ph-bold ph-paper-plane-right ml-2"></i>
+                                    <button type="submit" id="submitActivityBtn" class="flex-1 bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all flex justify-center items-center">
+                                        Submit <i class="ph-bold ph-paper-plane-right ml-2"></i>
                                     </button>
                                 </div>
                             </form>
@@ -3684,20 +3856,76 @@ v1.7.3 - 2026-03-17 04:52 AM: [FIX] Extreme CameraService simplification (no sta
                     `;
                     modal.classList.remove('hidden');
 
+                    const photoInput = document.getElementById('activityPhotoInput');
+                    const photoPreview = document.getElementById('photoPreview');
+                    const photoUploadUI = document.getElementById('photoUploadUI');
+                    let compressedImageBase64 = null;
+
+                    photoInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (!file) {
+                            photoPreview.classList.add('hidden');
+                            photoUploadUI.classList.remove('hidden');
+                            compressedImageBase64 = null;
+                            return;
+                        }
+
+                        photoUploadUI.innerHTML = '<div class="spinner w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><span class="text-xs font-bold text-slate-500 block text-center">Optimizing Image...</span>';
+
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                const MAX_WIDTH = 800;
+                                let width = img.width;
+                                let height = img.height;
+
+                                if (width > MAX_WIDTH) {
+                                    height = Math.round((height * MAX_WIDTH) / width);
+                                    width = MAX_WIDTH;
+                                }
+
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, width, height);
+
+                                compressedImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                                
+                                photoPreview.src = compressedImageBase64;
+                                photoPreview.classList.remove('hidden');
+                                photoUploadUI.classList.add('hidden');
+                            };
+                            img.src = event.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+
                     document.getElementById('studentDetailsForm').onsubmit = (e) => {
                         e.preventDefault();
+                        if (!compressedImageBase64) {
+                            app.showToast('Please take or upload an activity photo.', 'error');
+                            return;
+                        }
+
+                        const btn = document.getElementById('submitActivityBtn');
+                        btn.disabled = true;
+                        btn.innerHTML = '<div class="spinner w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+
                         const fd = new FormData(e.target);
                         const newInfo = {
                             name: fd.get('name'),
                             grade: fd.get('grade'),
                             section: fd.get('section'),
-                            group: fd.get('group')
+                            group: fd.get('group'),
+                            activityPhoto: compressedImageBase64
                         };
                         
                         if (!app.state.studentInfo) {
                             app.state.studentInfo = newInfo;
                         } else {
-                            app.state.studentInfo = { ...app.state.studentInfo, ...newInfo };
+                            app.state.studentInfo = { ...app.state.studentInfo, name: newInfo.name, grade: newInfo.grade, section: newInfo.section, group: newInfo.group };
                         }
                         
                         modal.classList.add('hidden');
