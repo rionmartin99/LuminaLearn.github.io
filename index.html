@@ -1,10 +1,11 @@
 <!--
 Change Log:
+v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
 v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
 v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed Activity Photos
 v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity unlock state, recovered username display, camera session logic, and photo pan/zoom modal.
 v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Switches) reset when starting a new quiz session.
-v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added readyState check + explicit play() to fix black heartbeat snapshots.
+
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -708,9 +709,10 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                 }
             },
 
-            async register(firstName, lastName, grade, section, password, classCode, username, callback) {
+            async register(firstName, lastName, grade, section, password, classCode, username, gender, callback) {
                 try {
-                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, section, password, classCode, username]);
+                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, section, password, classCode, username, gender]);
+
                     callback(res);
                 } catch (err) {
                     callback({ success: false, error: err });
@@ -810,6 +812,16 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                     callback({ success: false, error: err });
                 }
             },
+            
+            async updateGender(userId, newGender, callback) {
+                try {
+                    await BackEndService.call('updateGender', [userId, newGender]);
+                    callback({ success: true });
+                } catch (err) {
+                    callback({ success: false, error: err });
+                }
+            },
+
 
             async updateSecretQuestion(userId, question, answer, callback) {
                 try {
@@ -1177,17 +1189,26 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                                     </div>
                                     <div class="grid grid-cols-2 gap-3">
                                         <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Gender</label>
+                                            <select name="gender" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white transition-colors">
+                                                <option value="" disabled selected>Select</option>
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                            </select>
+                                        </div>
+                                        <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Grade</label>
                                             <select name="grade" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white">
                                                 <option value="" disabled selected>Select</option>
                                                 <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
-                                            <input type="text" name="section" required maxlength="10" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                        </div>
                                     </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
+                                        <input type="text" name="section" required maxlength="20" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                    </div>
+
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
                                         <input type="password" name="password" required minlength="6" maxlength="50" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
@@ -1228,7 +1249,8 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                                 btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Registering...';
 
                                 DataService.register(
-                                    fd.get('firstName'), fd.get('lastName'), fd.get('grade'), fd.get('section'), fd.get('password'), fd.get('classCode').trim(), fd.get('username'),
+                                    fd.get('firstName'), fd.get('lastName'), fd.get('grade'), fd.get('section'), fd.get('password'), fd.get('classCode').trim(), fd.get('username'), fd.get('gender'),
+
                                     (res) => {
                                         btn.disabled = false;
                                         btn.innerHTML = 'Register Account';
@@ -1244,8 +1266,10 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                                                 grade: fd.get('grade'),
                                                 section: fd.get('section'),
                                                 classCode: fd.get('classCode'),
-                                                username: fd.get('username')
+                                                username: fd.get('username'),
+                                                gender: fd.get('gender')
                                             };
+
                                             app.state.userId = res.user.userId;
                                             localStorage.setItem('lumina_uid', res.user.userId);
                                             localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
@@ -2310,6 +2334,29 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                             </form>
                         </div>
 
+                        <!-- EDIT GENDER -->
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                                    <i class="ph-bold ph-gender-intersex text-xl"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-800">Change Gender</h3>
+                            </div>
+                            <form id="genderForm" class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Gender</label>
+                                    <select name="newGender" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white transition-colors font-medium">
+                                        <option value="Male" ${info.gender === 'Male' ? 'selected' : ''}>Male</option>
+                                        <option value="Female" ${info.gender === 'Female' ? 'selected' : ''}>Female</option>
+                                    </select>
+                                </div>
+                                <button type="submit" id="genderBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-all">
+                                    Update Gender
+                                </button>
+                            </form>
+                        </div>
+
+
                         <!-- CHANGE PASSWORD -->
                         <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
                             <div class="flex items-center gap-3 mb-4">
@@ -2414,6 +2461,27 @@ v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added ready
                                 }
                             });
                         };
+
+                        // Gender form handler
+                        document.getElementById('genderForm').onsubmit = (e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target);
+                            const btn = document.getElementById('genderBtn');
+                            btn.disabled = true;
+                            btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
+                            DataService.updateGender(app.state.userId, fd.get('newGender'), (res) => {
+                                btn.disabled = false;
+                                btn.innerHTML = 'Update Gender';
+                                if (res.success) {
+                                    app.showToast("Gender updated!", "success");
+                                    app.state.studentInfo.gender = fd.get('newGender');
+                                    localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
+                                } else {
+                                    app.showToast(res.error || "Failed to update gender.", "error");
+                                }
+                            });
+                        };
+
 
                         // Password form handler
                         document.getElementById('passwordForm').onsubmit = (e) => {
