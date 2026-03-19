@@ -1,10 +1,10 @@
 <!--
 Change Log:
+v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
 v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed Activity Photos
 v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity unlock state, recovered username display, camera session logic, and photo pan/zoom modal.
 v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Switches) reset when starting a new quiz session.
 v1.8.3 - 2026-03-17 02:22 PM: [FIX] Captured text in copy events and added readyState check + explicit play() to fix black heartbeat snapshots.
-v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using Dynamic Viewport Height (100dvh) and Safe Area Insets (.pb-safe).
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -1618,6 +1618,9 @@ v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using 
                                         <option value="Q2" ${((app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1') === 'Q2' ? 'selected' : ''}>Q2</option>
                                         <option value="Q3" ${((app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1') === 'Q3' ? 'selected' : ''}>Q3</option>
                                         <option value="Q4" ${((app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1') === 'Q4' ? 'selected' : ''}>Q4</option>
+                                        <option value="Summer" ${((app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1') === 'Summer' ? 'selected' : ''}>Summer</option>
+                                        <option value="Tutorials" ${((app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1') === 'Tutorials' ? 'selected' : ''}>Tutorials</option>
+
                                     </select>
                                 </div>
                             </div>
@@ -2104,7 +2107,7 @@ v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using 
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Quarter</label>
                                         <select name="quarter" class="w-full p-3 rounded-xl bg-white border border-slate-200">
-                                            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
+                                            <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option><option>Summer</option><option>Tutorials</option>
                                         </select>
                                     </div>
                                 </div>
@@ -3332,8 +3335,11 @@ v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using 
                 },
 
                 openPhotoViewer(url) {
-                    const modal = document.getElementById('modal-overlay');
-                    modal.innerHTML = `
+                    const photoModal = document.createElement('div');
+                    photoModal.id = 'photo-modal-overlay';
+                    photoModal.className = 'fixed inset-0 z-[70] hidden';
+                    
+                    photoModal.innerHTML = `
                         <div class="bg-black/95 w-full h-full absolute inset-0 flex flex-col items-center justify-center p-4">
                             <div class="absolute top-4 right-4 flex gap-4 z-50">
                                 <button onclick="document.getElementById('photo-zoom').style.transform = 'scale(' + (parseFloat(document.getElementById('photo-zoom').style.transform.replace('scale(','')) + 0.5 || 1.5) + ')'" class="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors">
@@ -3345,19 +3351,23 @@ v1.8.2 - 2026-03-17 12:17 PM: [FIX] Improved mobile navigation visibility using 
                                 <button onclick="document.getElementById('photo-zoom').style.transform = 'scale(1)'; document.getElementById('photo-zoom').style.left = '0px'; document.getElementById('photo-zoom').style.top = '0px';" class="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors">
                                     <i class="ph-bold ph-arrows-out-simple text-xl"></i>
                                 </button>
-                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-3 bg-red-500/80 hover:bg-red-500 rounded-full text-white backdrop-blur-md transition-colors ml-4 shadow-lg shadow-red-500/20">
+                                <button onclick="document.getElementById('photo-modal-overlay').remove()" class="p-3 bg-red-500/80 hover:bg-red-500 rounded-full text-white backdrop-blur-md transition-colors ml-4 shadow-lg shadow-red-500/20">
                                     <i class="ph-bold ph-x text-xl"></i>
                                 </button>
                             </div>
                             <div class="w-full h-full overflow-hidden flex items-center justify-center cursor-move" 
                                  onmousedown="this.isDragging=true; this.startX=event.pageX - (parseFloat(document.getElementById('photo-zoom').style.left)||0); this.startY=event.pageY - (parseFloat(document.getElementById('photo-zoom').style.top)||0);" 
                                  onmouseup="this.isDragging=false;" onmouseleave="this.isDragging=false;" 
-                                 onmousemove="if(this.isDragging){ document.getElementById('photo-zoom').style.left = (event.pageX - this.startX) + 'px'; document.getElementById('photo-zoom').style.top = (event.pageY - this.startY) + 'px'; }">
+                                 onmousemove="if(this.isDragging){ document.getElementById('photo-zoom').style.left = (event.pageX - this.startX) + 'px'; document.getElementById('photo-zoom').style.top = (event.pageY - this.startY) + 'px'; }"
+                                 ontouchstart="this.isDragging=true; const touch = event.touches[0]; this.startX=touch.pageX - (parseFloat(document.getElementById('photo-zoom').style.left)||0); this.startY=touch.pageY - (parseFloat(document.getElementById('photo-zoom').style.top)||0);"
+                                 ontouchend="this.isDragging=false;" ontouchcancel="this.isDragging=false;"
+                                 ontouchmove="if(this.isDragging){ const touch = event.touches[0]; document.getElementById('photo-zoom').style.left = (touch.pageX - this.startX) + 'px'; document.getElementById('photo-zoom').style.top = (touch.pageY - this.startY) + 'px'; }">
                                 <img id="photo-zoom" src="${app.utils.getDriveImageUrl(url)}" style="transform: scale(1); transform-origin: center; position: relative; left: 0px; top: 0px;" class="max-w-full max-h-full transition-transform duration-200">
                             </div>
                         </div>
                     `;
-                    modal.classList.remove('hidden');
+                    document.body.appendChild(photoModal);
+                    photoModal.classList.remove('hidden');
                 },
 
                 gradeSubmission(userId, modId) {
