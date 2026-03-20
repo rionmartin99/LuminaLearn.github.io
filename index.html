@@ -1,10 +1,10 @@
 <!--
 Change Log:
+v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
 v2.6.0 - 2026-03-20 08:30 PM: [FEATURE] Teacher Mode enhancements: Status Indicators & Student View.
 v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
 v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
-v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed Activity Photos
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -1889,8 +1889,8 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                     const userProg = allProg[app.state.userId] || {};
                     const prog = userProg[id] || { content: false, app: false, score: null };
                     
-                    // In Student View, we treat the teacher as a student for UI logic (locks, progress etc)
-                    const isTeacher = app.state.userMode === 'teacher' && !app.state.viewAsStudent;
+                    const isTeacherMode = app.state.userMode === 'teacher';
+                    const showTeacherUI = isTeacherMode && !app.state.viewAsStudent;
 
                     // Status Helpers
                     const isAppDone = prog.app === true || prog.app === 'true' || prog.app === 'completed' || (prog.appGrade !== null && prog.appGrade !== undefined);
@@ -1908,7 +1908,7 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                                     <p class="text-xs text-slate-500 mt-1">${m.subject} • ${m.quarter || 'Q1'}</p>
                                 </div>
                             </div>
-                            ${isTeacher ? `
+                            ${showTeacherUI ? `
                                 <button onclick="app.components.showSettingsModal('${m.id}')" class="p-2 rounded-full hover:bg-slate-100 text-slate-600">
                                     <i class="ph-bold ph-gear" title="Module Settings"></i>
                                 </button>
@@ -1965,7 +1965,7 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                     step1.className = `p-5 rounded-2xl border ${prog.content ? 'border-green-200 bg-green-50/50' : 'border-brand-200 bg-white shadow-soft'}`;
 
                     let contentBtnLabel, contentBtnIcon;
-                    if (isTeacher) {
+                    if (showTeacherUI) {
                         contentBtnLabel = 'View Learning Content';
                         contentBtnIcon = 'ph-book-open-text';
                     } else {
@@ -1978,7 +1978,7 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                             <div class="w-8 h-8 rounded-full ${prog.content ? 'bg-green-500 text-white' : 'bg-brand-100 text-brand-600'} flex items-center justify-center font-bold">1</div>
                             <h3 class="font-bold text-slate-800">Learning Content</h3>
                         </div>
-                        <p class="text-sm text-slate-600 mb-4">Read the assigned material. ${isTeacher ? '' : 'You must complete the reading to unlock the next step.'}</p>
+                        <p class="text-sm text-slate-600 mb-4">Read the assigned material. ${showTeacherUI ? '' : 'You must complete the reading to unlock the next step.'}</p>
                         
                         <button onclick="app.handlers.openViewer('${m.id}', 'content')" class="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${prog.content ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700'}">
                             <i class="ph-bold ${contentBtnIcon}"></i> ${contentBtnLabel}
@@ -1988,11 +1988,11 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
 
                     // STEP 2: APPLICATION (Practice)
                     const step2 = document.createElement('div');
-                    const locked2 = !prog.content && !isTeacher;
+                    const locked2 = !prog.content && !isTeacherMode;
 
                     // Teacher Logic: Count Pending
                     let pendingCount = 0;
-                    if (isTeacher) {
+                    if (isTeacherMode) {
                         Object.values(allProg).forEach(u => {
                             const pApp = u[id] ? u[id].app : null;
                             if (pApp === 'pending' || pApp === 'submitted_offline' || (typeof pApp === 'string' && (pApp.startsWith('data:image') || pApp.startsWith('[')) && u[id].score === null)) pendingCount++;
@@ -2003,7 +2003,7 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
 
                     let step2StatusHtml = '';
                     if (!locked2) {
-                        if (isTeacher) {
+                        if (showTeacherUI) {
                             step2StatusHtml = `
                                 <div class="flex gap-2">
                                     <button onclick="app.handlers.openViewer('${m.id}', 'activity')" class="flex-1 bg-white border border-slate-200 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2">
@@ -2061,15 +2061,15 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                             </div>
                             <h3 class="font-bold text-slate-800">Activity Sheet</h3>
                         </div>
-                        ${!locked2 ? `<p class="text-sm text-slate-600 mb-4">Complete the practice sheet. ${isTeacher ? '' : 'Once done, confirm your submission.'}</p>` : ''}
+                        ${!locked2 ? `<p class="text-sm text-slate-600 mb-4">Complete the practice sheet. ${showTeacherUI ? '' : 'Once done, confirm your submission.'}</p>` : ''}
                         ${step2StatusHtml}
                     `;
                     content.appendChild(step2);
 
                     // STEP 3: QUIZ
                     const step3 = document.createElement('div');
-                    // Unlock if App is Done OR Pending for Students
-                    const locked3 = (!isAppDone && !isAppPending) && !isTeacher;
+                    // Unlock if App is Done OR Pending for Students, but TEACHER is always unlocked
+                    const locked3 = (!isAppDone && !isAppPending) && !isTeacherMode;
                     step3.className = `p-5 rounded-2xl border transition-all ${locked3 ? 'border-slate-100 locked-pattern opacity-70' : 'border-accent-200 bg-orange-50/30 shadow-soft'}`;
 
                     // 1. Calculate Leaderboard
@@ -2110,7 +2110,7 @@ v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed 
                     // 3. Quiz Content
                     let quizContent = '';
 
-                    if (isTeacher) {
+                    if (showTeacherUI) {
                         quizContent = `
                             <p class="text-sm text-slate-600 mb-4">View the results of all students who have taken this quiz.</p>
                             <button onclick="app.components.showModuleScores('${m.id}')" class="w-full bg-slate-900 py-3 rounded-xl text-white font-bold shadow-lg hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
