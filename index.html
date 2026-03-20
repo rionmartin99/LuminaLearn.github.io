@@ -1,11 +1,10 @@
 <!--
 Change Log:
+v2.6.0 - 2026-03-20 08:30 PM: [FEATURE] Teacher Mode enhancements: Status Indicators & Student View.
 v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
 v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
 v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed Activity Photos
 v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity unlock state, recovered username display, camera session logic, and photo pan/zoom modal.
-v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Switches) reset when starting a new quiz session.
-
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -182,6 +181,16 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
         .animate-ripple {
             animation: ripple 2s infinite;
         }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+
+        .animate-slide-down {
+            animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
 
         /* Safe area padding for mobile navigation */
         .pb-safe {
@@ -749,9 +758,11 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
             },
 
             async getOnlineStudents(callback) {
+                const userId = app.state.userId;
                 try {
-                    const res = await BackEndService.call('getOnlineStudents');
+                    const res = await BackEndService.call('getOnlineStudents', [userId]);
                     callback(res);
+
                 } catch (err) {
                     callback({ success: false, error: err });
                 }
@@ -768,9 +779,11 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
             },
 
             async getClassCode(callback) {
+                const userId = app.state.userId;
                 try {
-                    const res = await BackEndService.call('getClassCode');
+                    const res = await BackEndService.call('getClassCode', [userId]);
                     callback(res);
+
                 } catch (err) {
                     callback({ success: false, error: err });
                 }
@@ -920,6 +933,8 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
             state: {
                 view: 'dashboard',
                 userMode: 'student',
+                viewAsStudent: false,
+
                 scriptUrl: STANDALONE_CONFIG.API_URL || '<?= scriptUrl ?>',
                 activeFilter: { grade: 'All', subject: 'All' },
                 data: { modules: [], progress: {}, subjects: [] },
@@ -1105,7 +1120,27 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                 }
 
                 const container = document.getElementById('app-container');
+                
+                // Mode Indicator Banner for Teachers in Student View
+                const bannerId = 'teacher-view-banner';
+                let banner = document.getElementById(bannerId);
+                if (app.state.userMode === 'teacher' && app.state.viewAsStudent) {
+                    if (!banner) {
+                        banner = document.createElement('div');
+                        banner.id = bannerId;
+                        banner.className = "bg-brand-600 text-white px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-4 sticky top-0 z-[60] shadow-md border-b border-brand-500 animate-slide-down";
+                        banner.innerHTML = `
+                            <span><i class="ph-bold ph-eye mr-2"></i>TEACHER MODE: Viewing as Student</span>
+                            <button onclick="app.handlers.toggleViewAsStudent()" class="bg-white text-brand-600 px-3 py-1 rounded-full hover:bg-brand-50 transition-colors">Return to Teacher Mode</button>
+                        `;
+                        document.body.prepend(banner);
+                    }
+                } else if (banner) {
+                    banner.remove();
+                }
+
                 container.innerHTML = '';
+
 
                 switch (this.state.view) {
                     case 'auth': container.appendChild(this.components.auth()); break;
@@ -1591,7 +1626,12 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                                     <h2 class="text-2xl font-display font-black text-slate-900">Class Overview</h2>
                                     <p class="text-sm text-slate-500">Manage access codes and monitor students.</p>
                                 </div>
+                                <button onclick="app.handlers.toggleViewAsStudent()" class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                                    <i class="ph ph-student text-lg border-r pr-2"></i>
+                                    View as Student
+                                </button>
                             </div>
+
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Class Code Card -->
@@ -1718,11 +1758,14 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                     const activeQuarter = (app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1';
                     
                     const filteredModules = rawMods.filter(m => {
-                        const gMatch = app.state.activeFilter.grade === 'All' || String(m.grade) === String(app.state.activeFilter.grade);
+                        const gMatch = (app.state.viewAsStudent || !isTeacher) && app.state.studentInfo ? (String(app.state.activeFilter.grade) === 'All' || String(m.grade) === String(app.state.activeFilter.grade)) : (app.state.activeFilter.grade === 'All' || String(m.grade) === String(app.state.activeFilter.grade));
                         const sMatch = app.state.activeFilter.subject === 'All' || m.subject === app.state.activeFilter.subject;
-                        const qMatch = isTeacher ? true : (m.quarter === activeQuarter);
+                        
+                        // Quarter filtering: enforced for students AND for teachers in student view
+                        const qMatch = (isTeacher && !app.state.viewAsStudent) ? true : (m.quarter === activeQuarter);
                         return gMatch && sMatch && qMatch;
                     });
+
 
                     if (filteredModules.length === 0) {
                         grid.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400"><i class="ph ph-folder-open text-4xl mb-2"></i><p>No modules found.</p></div>`;
@@ -1748,7 +1791,8 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                         // Check Expiration / Active
                         const isExpired = m.expiration && new Date().getTime() > new Date(m.expiration).getTime();
                         const isInactive = m.isActive === false || m.isActive === 'false';
-                        const lockedState = (isExpired || isInactive) && app.state.userMode !== 'teacher';
+                        const lockedState = (isExpired || isInactive) && (app.state.userMode !== 'teacher' || app.state.viewAsStudent);
+
                         
                         const card = document.createElement('div');
                         card.className = `bg-white rounded-2xl p-5 shadow-soft relative overflow-hidden group active:scale-[0.98] transition-all ${lockedState ? 'cursor-not-allowed opacity-60 grayscale-[50%]' : 'cursor-pointer ' + gc.cardBorder}`;
@@ -1763,10 +1807,22 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                         let badgeColor = isComplete ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600';
                         let badgeText = isComplete ? `Score: ${prog.score}%` : 'In Progress';
                         if (!prog.content && !prog.app) { badgeText = 'Not Started'; }
-                        if (lockedState) {
+                        
+                        // Status Indicators for Teachers or Students
+                        if (isExpired) {
                             badgeColor = 'bg-red-100 text-red-700';
-                            badgeText = isExpired ? 'Expired' : 'Locked';
+                            badgeText = 'Expired';
+                        } else if (isInactive) {
+                            badgeColor = 'bg-amber-100 text-amber-700';
+                            badgeText = 'Disabled';
+                        } else if (isTeacher && !app.state.viewAsStudent) {
+                            // If active, show "Active" instead of progress for teachers (unless they have progress)
+                            if (!isComplete && !prog.content && !prog.app) {
+                                badgeColor = 'bg-green-100 text-green-700';
+                                badgeText = 'Active';
+                            }
                         }
+
 
                         let timerHtml = '';
                         if (!lockedState && m.expiration && !isComplete && app.state.userMode !== 'teacher') {
@@ -3242,6 +3298,12 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
             },
 
             handlers: {
+                toggleViewAsStudent() {
+                    app.state.viewAsStudent = !app.state.viewAsStudent;
+                    app.showToast(app.state.viewAsStudent ? "Viewing as Student" : "Returned to Teacher Mode", "success");
+                    app.render();
+                },
+
                 // TEACHER: CLASS MANAGEMENT UI HANDLERS
                 generateNewCode() {
                     const btn = event.currentTarget;
@@ -3267,7 +3329,9 @@ v1.8.4 - 2026-03-17 03:44 PM: [FIX] Ensured monitoring stats (Time Away, Tab Swi
                     app.state.data.settings.currentQuarter = val;
                     app.render();
                     app.showToast("Updating Quarter...", "success");
-                    BackEndService.call('updateSetting', ['currentQuarter', val]).then(res => {
+                    const userId = app.state.userId;
+                    BackEndService.call('updateSetting', ['currentQuarter', val, userId]).then(res => {
+
                         if(res && res.success) app.showToast("Quarter updated successfully.", "success");
                         else app.showToast("Failed to update quarter on server.", "error");
                     }).catch(e => {
