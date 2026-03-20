@@ -1,10 +1,10 @@
 <!--
 Change Log:
+v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
 v2.6.0 - 2026-03-20 08:30 PM: [FEATURE] Teacher Mode enhancements: Status Indicators & Student View.
 v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
 v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
 v2.4.0 - 2026-03-19 12:00 AM: [FEATURE] Added Quarter-Based Archiving and fixed Activity Photos
-v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity unlock state, recovered username display, camera session logic, and photo pan/zoom modal.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -584,6 +584,10 @@ v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity
 
             sync() {
                 if (!this.state.moduleId || !app.state.userId) return;
+                
+                // Skip sync if in Student View (Teachers shouldn't save monitoring logs)
+                if (app.state.viewAsStudent) return;
+
                 const logsJson = JSON.stringify(this.state.logs);
                 
                 BackEndService.call('saveMonitoringData', [app.state.userId, this.state.moduleId, logsJson])
@@ -698,6 +702,13 @@ v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity
                 if (typeof studentInfo === 'function') { callback = studentInfo; studentInfo = null; }
 
                 try {
+                    // Skip saving if in Student View mode
+                    if (app.state.viewAsStudent) {
+                        console.log("[StudentView] Progress save bypassed.");
+                        if (callback) callback({ success: true, studentView: true });
+                        return;
+                    }
+
                     await BackEndService.call('saveProgress', [userId, modId, step, value, studentInfo, points]);
                     if (callback) callback();
                 } catch (err) {
@@ -1877,7 +1888,9 @@ v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity
                     const allProg = app.state.data.progress || {};
                     const userProg = allProg[app.state.userId] || {};
                     const prog = userProg[id] || { content: false, app: false, score: null };
-                    const isTeacher = app.state.userMode === 'teacher';
+                    
+                    // In Student View, we treat the teacher as a student for UI logic (locks, progress etc)
+                    const isTeacher = app.state.userMode === 'teacher' && !app.state.viewAsStudent;
 
                     // Status Helpers
                     const isAppDone = prog.app === true || prog.app === 'true' || prog.app === 'completed' || (prog.appGrade !== null && prog.appGrade !== undefined);
@@ -3445,9 +3458,13 @@ v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity
                 },
 
                 markComplete(modId, step, status = true) {
+                    if (app.state.viewAsStudent) {
+                        app.showToast("Student View: Progress not recorded.", "info");
+                    }
+
                     // Logic: If Student is submitting Activity (status === 'pending'), show Modal first.
                     // If Teacher, just proceed.
-                    const isTeacher = app.state.userMode === 'teacher';
+                    const isTeacher = app.state.userMode === 'teacher' && !app.state.viewAsStudent;
 
                     if (!isTeacher && step === 'app' && status === 'pending') {
                         app.handlers.showStudentDetailsModal(modId, (details) => {
@@ -4003,7 +4020,7 @@ v1.8.5 - 2026-03-18 10:00 PM: [FIX] Updated app branding, fixed offline activity
                 },
 
                 startQuiz(modId) {
-                    if (app.state.userMode === 'teacher') {
+                    if (app.state.userMode === 'teacher' && !app.state.viewAsStudent) {
                         app.showToast("Teachers cannot take quizzes.", "error");
                         return;
                     }
