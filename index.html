@@ -3935,7 +3935,21 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                             bytes[i] = binaryStr.charCodeAt(i);
                                         }
                                         const decoder = new TextDecoder('utf-8');
-                                        const htmlStr = decoder.decode(bytes);
+                                        let htmlStr = decoder.decode(bytes);
+
+                                        // Failsafe for legacy uploads: if the file in Google Drive was saved as literal Base64 
+                                        // (e.g. before the standalone toBlob decoding was fixed), decode it again on the fly.
+                                        // "PCFET" = "<!DOC", "PGh0bW" = "<html"
+                                        if (htmlStr.startsWith('PCFET') || htmlStr.startsWith('PGh0bW')) {
+                                            try {
+                                                const decStr = atob(htmlStr);
+                                                const decBytes = new Uint8Array(decStr.length);
+                                                for (let i = 0; i < decStr.length; i++) decBytes[i] = decStr.charCodeAt(i);
+                                                htmlStr = decoder.decode(decBytes);
+                                            } catch (e) {
+                                                console.warn("Failsafe double-decode failed", e);
+                                            }
+                                        }
 
                                         // Cache for next time
                                         ContentCache.set(fileId, htmlStr);
