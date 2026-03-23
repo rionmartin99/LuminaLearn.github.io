@@ -1,6 +1,6 @@
 <!--
 Update Log:
-v2.6.9 - 2026-03-23 10:36 AM: [REMOVAL] Dropped YouTube URL feature entirely. Video content now uses direct file upload only (PDF, HTML, MP4). PDF hyperlinks to YouTube still work via Google Drive preview.
+v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks now clickable via pdf.js AnnotationLayer. Panning still works — short taps click links, drags pan. [FEATURE] Upload progress bar with XHR-based upload tracking.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
@@ -18,6 +18,7 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
@@ -718,14 +719,19 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                 }
             },
 
-            async uploadModule(form, callback) {
+            async uploadModule(form, callback, onProgress) {
                 // GAS mode: pass form natively (google.script.run handles blobs)
                 if (typeof google !== 'undefined' && google.script && google.script.run) {
-                    BackEndService.call('uploadModule', [form]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                    if (onProgress) onProgress(50, 'upload');
+                    BackEndService.call('uploadModule', [form]).then(res => {
+                        if (onProgress) onProgress(100, 'upload');
+                        callback(res);
+                    }).catch(e => callback({ success: false, error: e.toString() }));
                     return;
                 }
-                // Standalone/fetch mode: serialize form data + files as base64
+                // Standalone/fetch mode: serialize form data + files as base64, use XHR for progress
                 try {
+                    if (onProgress) onProgress(5, 'encode');
                     const fd = new FormData(form);
                     const payload = {
                         userId: app.state.userId || '',
@@ -744,17 +750,52 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                         reader.readAsDataURL(file);
                     });
 
+                    if (onProgress) onProgress(10, 'encode');
                     payload.contentFile = await readFileAsBase64(fd.get('contentFile'));
+                    if (onProgress) onProgress(20, 'encode');
                     payload.appFile    = await readFileAsBase64(fd.get('appFile'));
+                    if (onProgress) onProgress(30, 'encode');
                     payload.quizFile   = fd.get('quizFile') && fd.get('quizFile').size > 0
                         ? await (new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsText(fd.get('quizFile')); }))
                         : null;
+                    if (onProgress) onProgress(40, 'encode');
 
-                    BackEndService.call('uploadModule', [payload]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                    // Use XHR instead of fetch so we get real upload progress
+                    const apiUrl = STANDALONE_CONFIG.API_URL;
+                    const body = JSON.stringify({ action: 'uploadModule', args: [payload] });
+
+                    await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', apiUrl);
+                        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+
+                        xhr.upload.onprogress = (ev) => {
+                            if (ev.lengthComputable && onProgress) {
+                                // Map XHR upload phase to 40–95%
+                                const xhrPct = 40 + (ev.loaded / ev.total) * 55;
+                                onProgress(xhrPct, 'upload');
+                            }
+                        };
+
+                        xhr.onload = () => {
+                            if (onProgress) onProgress(97, 'upload');
+                            try {
+                                const res = JSON.parse(xhr.responseText);
+                                resolve(res.success ? res.data : Promise.reject(res.error));
+                            } catch (e) { reject(e); }
+                        };
+                        xhr.onerror = () => reject(new Error('Network error during upload'));
+                        xhr.send(body);
+                    }).then(data => {
+                        callback(data !== undefined ? data : { success: true });
+                    }).catch(e => callback({ success: false, error: String(e) }));
+
                 } catch (err) {
                     callback({ success: false, error: err.toString() });
                 }
             },
+
+
 
 
             async updateModule(form, callback) {
@@ -2304,6 +2345,17 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                 <input type="file" name="quizFile" accept=".csv" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent-50 file:text-accent-700 hover:file:bg-accent-100">
                             </div>
 
+                            <!-- Upload Progress Bar (hidden until upload starts) -->
+                            <div id="upload-progress-wrap" class="hidden mt-4">
+                                <div class="flex justify-between text-xs font-semibold text-slate-500 mb-1">
+                                    <span id="upload-progress-label">Preparing files...</span>
+                                    <span id="upload-progress-pct">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                    <div id="upload-progress-bar" class="h-full bg-brand-500 rounded-full transition-all duration-200" style="width:0%"></div>
+                                </div>
+                            </div>
+
                             <button type="submit" id="submitBtn" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all mt-4">
                                 <i class="ph-bold ph-cloud-arrow-up mr-2"></i> Upload to System
                             </button>
@@ -2315,8 +2367,17 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                         form.onsubmit = (e) => {
                             e.preventDefault();
                             const btn = document.getElementById('submitBtn');
+                            const progressWrap = document.getElementById('upload-progress-wrap');
+                            const progressBar  = document.getElementById('upload-progress-bar');
+                            const progressPct  = document.getElementById('upload-progress-pct');
+                            const progressLbl  = document.getElementById('upload-progress-label');
+
                             btn.disabled = true;
                             btn.innerHTML = '<div class="spinner w-6 h-6 border-2"></div> Uploading...';
+                            progressWrap.classList.remove('hidden');
+                            progressBar.style.width = '0%';
+                            progressPct.textContent = '0%';
+                            progressLbl.textContent = 'Encoding files...';
 
                             // Inject userId so the backend can verify teacher access
                             let uidField = form.querySelector('input[name="userId"]');
@@ -2328,23 +2389,33 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                             }
                             uidField.value = app.state.userId || '';
 
-                            // Safety timeout: If no response in 5 minutes, show error
+                            // Safety timeout: 5 minutes
                             const uploadTimeout = setTimeout(() => {
                                 btn.disabled = false;
                                 btn.innerHTML = '<i class="ph-bold ph-cloud-arrow-up mr-2"></i> Upload to System';
-                                app.showToast("Upload timed out. The file may be too large (max ~25MB). Try reducing the PDF file size and re-uploading.", 'error');
-                            }, 300000); // 5 minutes
+                                progressWrap.classList.add('hidden');
+                                app.showToast("Upload timed out. The file may be too large. Try reducing file sizes.", 'error');
+                            }, 300000);
 
                             DataService.uploadModule(form, (res) => {
                                 clearTimeout(uploadTimeout);
                                 btn.disabled = false;
                                 btn.innerHTML = '<i class="ph-bold ph-cloud-arrow-up mr-2"></i> Upload to System';
                                 if (res.success) {
+                                    progressBar.style.width = '100%';
+                                    progressPct.textContent = '100%';
+                                    progressLbl.textContent = 'Upload complete!';
                                     app.showToast("Module uploaded successfully!");
-                                    app.refreshData(() => app.navigate('dashboard'));
+                                    setTimeout(() => app.refreshData(() => app.navigate('dashboard')), 600);
                                 } else {
+                                    progressWrap.classList.add('hidden');
                                     app.showToast("Upload failed: " + (res.error || 'Unknown error. Check file sizes.'), 'error');
                                 }
+                            }, (pct, phase) => {
+                                // Progress callback
+                                progressBar.style.width = pct + '%';
+                                progressPct.textContent = Math.round(pct) + '%';
+                                progressLbl.textContent = phase === 'encode' ? 'Encoding files...' : 'Sending to server...';
                             });
                         };
                     }, 0);
@@ -3834,8 +3905,7 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                 if(el) el.style.opacity = '0';
                                 setTimeout(() => el?.remove(), 500);
                             }, 3000);
-
-
+                        } else if (docType === 'html') {
                             // HTML Viewer Interface
                             content.innerHTML = `
                                 <div class="w-full h-full relative">
@@ -3883,10 +3953,11 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                             }
 
                         } else {
-                            // PDF VIEWER — pdf.js canvas with pinch-to-zoom & pan controls
+                            // PDF VIEWER — pdf.js canvas with annotation layer, pinch-to-zoom & pan controls
                             content.innerHTML = `
-                                <div class="relative w-full h-full bg-slate-100 overflow-hidden touch-none flex flex-col items-center justify-center">
+                                <div class="relative w-full h-full bg-slate-100 overflow-hidden touch-none flex flex-col items-center justify-center" id="pdf-container">
                                     <canvas id="pdf-render" class="shadow-lg transition-transform duration-100 origin-center"></canvas>
+                                    <div id="pdf-annotation-layer" class="annotationLayer absolute top-0 left-0 origin-top-left pointer-events-auto" style="z-index:10;"></div>
                                     
                                     <div id="pdf-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-20">
                                         <div class="spinner w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -4039,9 +4110,15 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                 app.state.pdfState.startScale = app.state.pdfState.scale;
                                 return;
                             }
+                            // Record start position to distinguish click (short tap) from drag (pan)
+                            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                            app.state.pdfState.panStartX = clientX;
+                            app.state.pdfState.panStartY = clientY;
+                            app.state.pdfState.didPan = false;
                             app.state.pdfState.isDragging = true;
-                            app.state.pdfState.lastX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-                            app.state.pdfState.lastY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                            app.state.pdfState.lastX = clientX;
+                            app.state.pdfState.lastY = clientY;
                             canvas.style.cursor = 'grabbing';
                         };
 
@@ -4072,6 +4149,11 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                             const deltaX = clientX - app.state.pdfState.lastX;
                             const deltaY = clientY - app.state.pdfState.lastY;
 
+                            // Mark as a real pan only if moved more than 5px
+                            const totalDX = clientX - app.state.pdfState.panStartX;
+                            const totalDY = clientY - app.state.pdfState.panStartY;
+                            if (Math.hypot(totalDX, totalDY) > 5) app.state.pdfState.didPan = true;
+
                             app.state.pdfState.offsetX += deltaX;
                             app.state.pdfState.offsetY += deltaY;
 
@@ -4082,7 +4164,20 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                         };
 
                         const endPan = (e) => {
+                            // If user barely moved (< 5px), treat as a click — let annotation layer handle it
+                            if (app.state.pdfState.isDragging && !app.state.pdfState.didPan) {
+                                const annLayer = document.getElementById('pdf-annotation-layer');
+                                if (annLayer) {
+                                    // Find any link element at the click position
+                                    const rect = annLayer.getBoundingClientRect();
+                                    const clickX = (app.state.pdfState.lastX - rect.left - app.state.pdfState.offsetX) / app.state.pdfState.scale;
+                                    const clickY = (app.state.pdfState.lastY - rect.top  - app.state.pdfState.offsetY) / app.state.pdfState.scale;
+                                    const el = annLayer.querySelector(':hover a, a:hover');
+                                    if (el) el.click();
+                                }
+                            }
                             app.state.pdfState.isDragging = false;
+                            app.state.pdfState.didPan = false;
                             if (e.touches && e.touches.length < 2) {
                                 app.state.pdfState.isPinching = false;
                             }
@@ -4132,17 +4227,48 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                     };
 
                     await page.render(renderContext).promise;
+
+                    // Render annotation layer (enables clickable PDF hyperlinks)
+                    const annLayerDiv = document.getElementById('pdf-annotation-layer');
+                    if (annLayerDiv && pdfjsLib.AnnotationLayer) {
+                        annLayerDiv.innerHTML = '';
+                        annLayerDiv.style.width  = viewport.width  + 'px';
+                        annLayerDiv.style.height = viewport.height + 'px';
+
+                        const annotations = await page.getAnnotations();
+                        pdfjsLib.AnnotationLayer.render({
+                            viewport: viewport.clone({ dontFlip: false }),
+                            div: annLayerDiv,
+                            annotations,
+                            page,
+                            linkService: {
+                                getDestinationHash: () => '#',
+                                getAnchorUrl: (url) => url,
+                                navigateTo: () => {},
+                                executeNamedAction: () => {},
+                                externalLinkTarget: 2,   // 2 = _blank (open in new tab)
+                                externalLinkRel: 'noopener noreferrer nofollow',
+                            },
+                            renderInteractiveForms: false,
+                        });
+
+                        // Style all external links to open in new tab
+                        annLayerDiv.querySelectorAll('a[href]').forEach(a => {
+                            a.target = '_blank';
+                            a.rel = 'noopener noreferrer';
+                        });
+                    }
+
                     app.handlers.updateCanvasTransform();
                 },
 
                 updateCanvasTransform() {
                     const canvas = document.getElementById('pdf-render');
-                    // We use CSS transform for smooth panning/zooming without re-rendering canvas every frame
-                    // BUT for quality zoom we re-render on zoom end.
-                    // For now, let's keep it simple: Re-render on zoom, CSS transform for Pan?
-                    // Actually, simple transform is better for performance.
-
-                    canvas.style.transform = `translate(${app.state.pdfState.offsetX}px, ${app.state.pdfState.offsetY}px) scale(${app.state.pdfState.scale})`;
+                    const annLayer = document.getElementById('pdf-annotation-layer');
+                    const t = `translate(${app.state.pdfState.offsetX}px, ${app.state.pdfState.offsetY}px) scale(${app.state.pdfState.scale})`;
+                    // Apply the same transform to both canvas and annotation layer so links stay aligned
+                    canvas.style.transform = t;
+                    if (annLayer) annLayer.style.transform = t;
                 },
 
                 zoomIn() {
