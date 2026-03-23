@@ -1,8 +1,8 @@
 <!--
 Update Log:
-v2.7.3 - 2026-03-23 12:30 PM: [FEATURE] Automatically injects <base target="_blank"> into HTML content to force external links.
-v2.7.2 - 2026-03-23 12:25 PM: [FIX] Updated HTML viewer sandbox to allow popups, enabling external links with target="_blank".
-v2.7.1 - 2026-03-23 11:30 AM: [FIX] Re-added HTML base64 decoding to support legacy modules and flush ContentCache.
+v2.7.4 - 2026-03-23 12:35 PM: [FEATURE] Global Link Interceptor for HTML viewer to force all hyperlinks to open in new windows.
+v2.7.3 - 2026-03-23 12:30 PM: [FEATURE] Automatically injects <base target="_blank"> into HTML content.
+v2.7.2 - 2026-03-23 12:25 PM: [FIX] Updated HTML viewer sandbox to allow popups.
 v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks clickable (pdf.js AnnotationLayer). [FEATURE] Upload progress bar added.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FIX] YouTube URLs dropped.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
@@ -1015,7 +1015,8 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
          */
         const ContentCache = {
             // Prefix bumped to _v2_ to auto-bust stale sessions from before the HTML decode fix
-            _prefix: 'lumina_cache_v2_',
+            // Prefix bumped to _v3_ to force link interception for all users
+            _prefix: 'lumina_cache_v3_',
             get(fileId) {
                 try {
                     return sessionStorage.getItem(this._prefix + fileId);
@@ -3919,46 +3920,63 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
                                 </div>
                             `;
 
+                            // Helper: Force all links to open in a new tab
+                            const forceExternalLinks = (html) => {
+                                if (!html) return html;
+                                let modified = html;
+                                // 1. Inject <base target="_blank">
+                                if (modified.toLowerCase().includes('<head>')) {
+                                    modified = modified.replace(/<head>/i, '<head><base target="_blank">');
+                                } else {
+                                    modified = '<base target="_blank">' + modified;
+                                }
+                                // 2. JS Interceptor for absolute reliability
+                                const interceptor = `
+                                    <script>
+                                        document.addEventListener('click', function(e) {
+                                            const a = e.target.closest('a');
+                                            if (a && a.href && !a.href.startsWith('#') && !a.href.startsWith('javascript:')) {
+                                                e.preventDefault();
+                                                window.open(a.href, '_blank');
+                                            }
+                                        }, true);
+                                    </script>
+                                `;
+                                if (modified.toLowerCase().includes('</body>')) {
+                                    return modified.replace(/<\/body>/i, interceptor + '</body>');
+                                }
+                                return modified + interceptor;
+                            };
+
                             // Shared helper: decode a base64 payload to HTML string.
-                            // Also handles legacy uploads where the file in Drive was stored as a literal base64 string.
                             const decodeHtmlStr = (base64) => {
                                 const binaryStr = atob(base64);
                                 const bytes = new Uint8Array(binaryStr.length);
                                 for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
                                 const decoder = new TextDecoder('utf-8');
                                 let str = decoder.decode(bytes);
-                                // Failsafe: if decoded string is still base64 (legacy double-encoded file),
-                                // decode one more time. "PCFET" = "<!DOC", "PGh0" = "<htr", "PGh" = "<h"
                                 if (/^PCFE|^PGh0|^PHNj|^PCFET/.test(str)) {
                                     try {
                                         const b2 = atob(str);
                                         const b2b = new Uint8Array(b2.length);
                                         for (let i = 0; i < b2.length; i++) b2b[i] = b2.charCodeAt(i);
                                         str = decoder.decode(b2b);
-                                    } catch(e) { /* keep str as-is */ }
+                                    } catch(e) {}
                                 }
-
-                                // Force all links to open in a new tab to prevent iframe blocks
-                                if (str.toLowerCase().includes('<head>')) {
-                                    str = str.replace(/<head>/i, '<head><base target="_blank">');
-                                } else {
-                                    str = '<base target="_blank">' + str;
-                                }
-
                                 return str;
                             };
 
-                            // Check cache first (v2 prefix guarantees no stale base64 entries)
+                            // Check cache (v3 prefix busts old link-blocked entries)
                             const cachedHtml = ContentCache.get(fileId);
                             if (cachedHtml) {
-                                // Even cached values go through the failsafe in case v2 cache was poisoned
-                                let safeHtml = cachedHtml;
-                                if (/^PCFE|^PGh0|^PHNj|^PCFET/.test(cachedHtml)) {
-                                    try { safeHtml = decodeHtmlStr(cachedHtml); } catch(e) {}
+                                // Double check if it's still base64 (legacy)
+                                let html = cachedHtml;
+                                if (/^PCFE|^PGh0|^PHNj|^PCFET/.test(html)) {
+                                    try { html = decodeHtmlStr(html); } catch(e) {}
                                 }
                                 const iframe = document.getElementById('docViewerIframe');
                                 if (iframe) {
-                                    iframe.srcdoc = safeHtml;
+                                    iframe.srcdoc = forceExternalLinks(html);
                                     document.getElementById('pdf-loading').classList.add('hidden');
                                 }
                             } else {
@@ -3966,18 +3984,16 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
                                 DataService.getPdfContent(fileId, (res) => {
                                     if (res && res.success) {
                                         const htmlStr = decodeHtmlStr(res.data);
-
-                                        // Cache the fully decoded HTML string
                                         ContentCache.set(fileId, htmlStr);
 
                                         const iframe = document.getElementById('docViewerIframe');
                                         if (iframe) {
-                                            iframe.srcdoc = htmlStr;
+                                            iframe.srcdoc = forceExternalLinks(htmlStr);
                                             document.getElementById('pdf-loading').classList.add('hidden');
                                         }
                                     } else {
-                                        app.showToast("Failed to load HTML: " + (res?.error || 'Unknown error'), 'error');
-                                        document.getElementById('pdf-loading').innerHTML = `<p class="text-red-500">Error loading document.</p>`;
+                                        app.showToast("Failed to load: " + (res?.error || 'Unknown'), 'error');
+                                        document.getElementById('pdf-loading').innerHTML = `<p class="text-red-500">Error.</p>`;
                                     }
                                 });
                             }
