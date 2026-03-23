@@ -1,5 +1,7 @@
 <!--
 Update Log:
+v2.7.3 - 2026-03-23 12:30 PM: [FEATURE] Automatically injects <base target="_blank"> into HTML content to force external links.
+v2.7.2 - 2026-03-23 12:25 PM: [FIX] Updated HTML viewer sandbox to allow popups, enabling external links with target="_blank".
 v2.7.1 - 2026-03-23 11:30 AM: [FIX] Re-added HTML base64 decoding to support legacy modules and flush ContentCache.
 v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks clickable (pdf.js AnnotationLayer). [FEATURE] Upload progress bar added.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FIX] YouTube URLs dropped.
@@ -3909,7 +3911,7 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
                             // HTML Viewer Interface
                             content.innerHTML = `
                                 <div class="w-full h-full relative">
-                                    <iframe id="docViewerIframe" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-forms" srcdoc=""></iframe>
+                                    <iframe id="docViewerIframe" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" srcdoc=""></iframe>
                                     <div id="pdf-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-20">
                                         <div class="spinner w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                                         <p class="text-sm font-medium text-slate-600">Loading Interactive Content...</p>
@@ -3935,6 +3937,14 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
                                         str = decoder.decode(b2b);
                                     } catch(e) { /* keep str as-is */ }
                                 }
+
+                                // Force all links to open in a new tab to prevent iframe blocks
+                                if (str.toLowerCase().includes('<head>')) {
+                                    str = str.replace(/<head>/i, '<head><base target="_blank">');
+                                } else {
+                                    str = '<base target="_blank">' + str;
+                                }
+
                                 return str;
                             };
 
