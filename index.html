@@ -1,11 +1,10 @@
 <!--
 Update Log:
-v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks now clickable via pdf.js AnnotationLayer. Panning still works — short taps click links, drags pan. [FEATURE] Upload progress bar with XHR-based upload tracking.
-v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
+v2.7.1 - 2026-03-23 11:30 AM: [FIX] Re-added HTML base64 decoding to support legacy modules and flush ContentCache.
+v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks clickable (pdf.js AnnotationLayer). [FEATURE] Upload progress bar added.
+v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FIX] YouTube URLs dropped.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
-v2.6.0 - 2026-03-20 08:30 PM: [FEATURE] Teacher Mode enhancements: Status Indicators & Student View.
-v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -1013,7 +1012,8 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
          * Caches PDF/HTML base64 data to avoid re-fetching from backend on revisit.
          */
         const ContentCache = {
-            _prefix: 'lumina_cache_',
+            // Prefix bumped to _v2_ to auto-bust stale sessions from before the HTML decode fix
+            _prefix: 'lumina_cache_v2_',
             get(fileId) {
                 try {
                     return sessionStorage.getItem(this._prefix + fileId);
@@ -3917,41 +3917,47 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                 </div>
                             `;
 
-                            // Check cache first
+                            // Shared helper: decode a base64 payload to HTML string.
+                            // Also handles legacy uploads where the file in Drive was stored as a literal base64 string.
+                            const decodeHtmlStr = (base64) => {
+                                const binaryStr = atob(base64);
+                                const bytes = new Uint8Array(binaryStr.length);
+                                for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                                const decoder = new TextDecoder('utf-8');
+                                let str = decoder.decode(bytes);
+                                // Failsafe: if decoded string is still base64 (legacy double-encoded file),
+                                // decode one more time. "PCFET" = "<!DOC", "PGh0" = "<htr", "PGh" = "<h"
+                                if (/^PCFE|^PGh0|^PHNj|^PCFET/.test(str)) {
+                                    try {
+                                        const b2 = atob(str);
+                                        const b2b = new Uint8Array(b2.length);
+                                        for (let i = 0; i < b2.length; i++) b2b[i] = b2.charCodeAt(i);
+                                        str = decoder.decode(b2b);
+                                    } catch(e) { /* keep str as-is */ }
+                                }
+                                return str;
+                            };
+
+                            // Check cache first (v2 prefix guarantees no stale base64 entries)
                             const cachedHtml = ContentCache.get(fileId);
                             if (cachedHtml) {
+                                // Even cached values go through the failsafe in case v2 cache was poisoned
+                                let safeHtml = cachedHtml;
+                                if (/^PCFE|^PGh0|^PHNj|^PCFET/.test(cachedHtml)) {
+                                    try { safeHtml = decodeHtmlStr(cachedHtml); } catch(e) {}
+                                }
                                 const iframe = document.getElementById('docViewerIframe');
                                 if (iframe) {
-                                    iframe.srcdoc = cachedHtml;
+                                    iframe.srcdoc = safeHtml;
                                     document.getElementById('pdf-loading').classList.add('hidden');
                                 }
                             } else {
-                                // Fetch HTML Content from backend
-                                 DataService.getPdfContent(fileId, (res) => {
+                                // Fetch from backend
+                                DataService.getPdfContent(fileId, (res) => {
                                     if (res && res.success) {
-                                        const binaryStr = atob(res.data);
-                                        const bytes = new Uint8Array(binaryStr.length);
-                                        for (let i = 0; i < binaryStr.length; i++) {
-                                            bytes[i] = binaryStr.charCodeAt(i);
-                                        }
-                                        const decoder = new TextDecoder('utf-8');
-                                        let htmlStr = decoder.decode(bytes);
+                                        const htmlStr = decodeHtmlStr(res.data);
 
-                                        // Failsafe for legacy uploads: if the file in Google Drive was saved as literal Base64 
-                                        // (e.g. before the standalone toBlob decoding was fixed), decode it again on the fly.
-                                        // "PCFET" = "<!DOC", "PGh0bW" = "<html"
-                                        if (htmlStr.startsWith('PCFET') || htmlStr.startsWith('PGh0bW')) {
-                                            try {
-                                                const decStr = atob(htmlStr);
-                                                const decBytes = new Uint8Array(decStr.length);
-                                                for (let i = 0; i < decStr.length; i++) decBytes[i] = decStr.charCodeAt(i);
-                                                htmlStr = decoder.decode(decBytes);
-                                            } catch (e) {
-                                                console.warn("Failsafe double-decode failed", e);
-                                            }
-                                        }
-
-                                        // Cache for next time
+                                        // Cache the fully decoded HTML string
                                         ContentCache.set(fileId, htmlStr);
 
                                         const iframe = document.getElementById('docViewerIframe');
