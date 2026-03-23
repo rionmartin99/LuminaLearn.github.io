@@ -1,6 +1,6 @@
 <!--
 Update Log:
-v2.6.7 - 2026-03-23 10:17 AM: [FIX] YouTube embed now uses youtube-nocookie.com + origin param. Added fallback overlay with "Open in YouTube" button when video has embedding disabled.
+v2.6.8 - 2026-03-23 10:26 AM: [FIX] YouTube embed: fixed onError event listener (was 'infoDelivery', now 'onError'), added always-visible "Open in YouTube" pill button, added /shorts/ and /embed/ URL format support.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
@@ -3854,11 +3854,13 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
 
                         } else if (docType === 'youtube') {
                             // YOUTUBE PLAYER — Extract ID and embed
-                            let ytId = fileId;
-                            if (fileId.includes('v=')) ytId = fileId.split('v=')[1].split('&')[0];
-                            else if (fileId.includes('youtu.be/')) ytId = fileId.split('youtu.be/')[1].split('?')[0];
-                            // Strip any trailing fragment
-                            ytId = ytId.split('#')[0].trim();
+                            let ytId = fileId ? fileId.trim() : '';
+                            // Support all common YouTube URL formats
+                            if (ytId.includes('v='))              ytId = ytId.split('v=')[1].split('&')[0].split('#')[0];
+                            else if (ytId.includes('youtu.be/'))  ytId = ytId.split('youtu.be/')[1].split('?')[0].split('#')[0];
+                            else if (ytId.includes('/shorts/'))   ytId = ytId.split('/shorts/')[1].split('?')[0].split('#')[0];
+                            else if (ytId.includes('/embed/'))    ytId = ytId.split('/embed/')[1].split('?')[0].split('#')[0];
+                            // else assume it's already a raw video ID
 
                             const ytOrigin = encodeURIComponent(location.origin || 'https://rionmartin99.github.io');
                             const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&enablejsapi=1&origin=${ytOrigin}`;
@@ -3870,31 +3872,38 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowfullscreen>
                                     </iframe>
-                                    <!-- Fallback shown if YouTube reports an embed error -->
-                                    <div id="yt-fallback" class="absolute inset-0 bg-slate-900 flex-col items-center justify-center text-center px-6 hidden" style="display:none">
+
+                                    <!-- Always-visible escape hatch in top-right corner -->
+                                    <a href="${watchUrl}" target="_blank" id="yt-open-btn"
+                                        class="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-black/70 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm transition-all duration-200"
+                                        title="Open in YouTube">
+                                        <i class="ph-bold ph-youtube-logo text-red-400"></i> Open in YouTube
+                                    </a>
+
+                                    <!-- Full fallback shown when YouTube reports embed is blocked -->
+                                    <div id="yt-fallback" class="absolute inset-0 bg-slate-900 flex-col items-center justify-center text-center px-6" style="display:none">
                                         <i class="ph-bold ph-youtube-logo text-red-500 text-5xl mb-4"></i>
                                         <p class="text-white font-bold text-lg mb-1">This video can't be embedded</p>
                                         <p class="text-slate-400 text-sm mb-6">The video owner has disabled playback on external sites.</p>
                                         <a href="${watchUrl}" target="_blank"
                                             class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition-all text-sm">
-                                            <i class="ph-bold ph-arrow-square-out"></i> Open in YouTube
+                                            <i class="ph-bold ph-arrow-square-out"></i> Watch on YouTube
                                         </a>
                                     </div>
                                 </div>
                             `;
 
-                            // Listen for YouTube IFrame API error events (codes 100, 101, 150 = not embeddable)
+                            // Listen for YouTube IFrame API error events
+                            // YouTube sends: { event: 'onError', info: <errorCode> }
+                            // Error codes 100, 101, 150 = video not embeddable / not found
                             const ytErrorHandler = (event) => {
                                 try {
-                                    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                                    if (data && data.event === 'infoDelivery' && data.info && data.info.error) {
-                                        const errCode = data.info.error;
-                                        if ([100, 101, 150].includes(errCode)) {
-                                            const fb = document.getElementById('yt-fallback');
-                                            if (fb) { fb.style.display = 'flex'; }
-                                        }
+                                    const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                                    if (msg && msg.event === 'onError') {
+                                        const fb = document.getElementById('yt-fallback');
+                                        if (fb) fb.style.display = 'flex';
                                     }
-                                } catch(e) { /* ignore parse errors from other iframes */ }
+                                } catch(e) { /* ignore non-JSON messages from other origins */ }
                             };
                             window.addEventListener('message', ytErrorHandler);
 
