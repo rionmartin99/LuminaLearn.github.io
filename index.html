@@ -1,8 +1,8 @@
 <!--
 Update Log:
+v2.7.5 - 2026-03-23 12:45 PM: [FIX] Escaped internal script tags to prevent cloud connection hang.
 v2.7.4 - 2026-03-23 12:35 PM: [FEATURE] Global Link Interceptor for HTML viewer to force all hyperlinks to open in new windows.
 v2.7.3 - 2026-03-23 12:30 PM: [FEATURE] Automatically injects <base target="_blank"> into HTML content.
-v2.7.2 - 2026-03-23 12:25 PM: [FIX] Updated HTML viewer sandbox to allow popups.
 v2.7.0 - 2026-03-23 10:50 AM: [FEATURE] PDF hyperlinks clickable (pdf.js AnnotationLayer). [FEATURE] Upload progress bar added.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FIX] YouTube URLs dropped.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
@@ -3940,7 +3940,7 @@ v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction 
                                                 window.open(a.href, '_blank');
                                             }
                                         }, true);
-                                    </script>
+                                    <\/script>
                                 `;
                                 if (modified.toLowerCase().includes('</body>')) {
                                     return modified.replace(/<\/body>/i, interceptor + '</body>');
