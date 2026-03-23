@@ -1,10 +1,11 @@
 <!--
-Change Log:
+Update Log:
+v2.6.6 - 2026-03-23 09:53 AM: [FIX] updateModule also suffered from the same JSON-serialization issue. Fixed by extracting all form fields + base64 files into a plain object before sending.
+v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
 v2.6.0 - 2026-03-20 08:30 PM: [FEATURE] Teacher Mode enhancements: Status Indicators & Student View.
 v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV download (Section -> Gender -> Last Name).
-v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarters. [FIX] Fixed mobile panning and close button overlay issue in photo viewer.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -717,16 +718,89 @@ v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarte
                 }
             },
 
-            async uploadModule(formObject, callback) {
+            async uploadModule(form, callback) {
+                // GAS mode: pass form natively (google.script.run handles blobs)
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                    BackEndService.call('uploadModule', [form]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                    return;
+                }
+                // Standalone/fetch mode: serialize form data + files as base64
                 try {
-                    // Note: uploadModule in GAS only supports formObject in GAS context.
-                    // In standalone, we might need to handle base64 encoding or similar.
-                    // For now, we assume GAS context for uploads or specialized handling.
-                    const res = await BackEndService.call('uploadModule', [formObject]);
-                    callback(res);
+                    const fd = new FormData(form);
+                    const payload = {
+                        userId: app.state.userId || '',
+                        title: fd.get('title') || '',
+                        subject: fd.get('subject') || '',
+                        grade: fd.get('grade') || '',
+                        quarter: fd.get('quarter') || 'Q1',
+                        expiration: fd.get('expiration') || '',
+                        youtubeUrl: fd.get('youtubeUrl') || ''
+                    };
+
+                    const readFileAsBase64 = (file) => new Promise((res) => {
+                        if (!file || file.size === 0) { res(null); return; }
+                        const reader = new FileReader();
+                        reader.onload = (e) => res({ data: e.target.result.split(',')[1], mimeType: file.type, name: file.name });
+                        reader.readAsDataURL(file);
+                    });
+
+                    payload.contentFile = await readFileAsBase64(fd.get('contentFile'));
+                    payload.appFile    = await readFileAsBase64(fd.get('appFile'));
+                    payload.quizFile   = fd.get('quizFile') && fd.get('quizFile').size > 0
+                        ? await (new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsText(fd.get('quizFile')); }))
+                        : null;
+
+                    BackEndService.call('uploadModule', [payload]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
                 } catch (err) {
                     callback({ success: false, error: err.toString() });
                 }
+            },
+
+
+            async updateModule(form, callback) {
+                // GAS mode: pass form natively
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                    BackEndService.call('updateModule', [form]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                    return;
+                }
+                // Standalone/fetch mode: serialize to plain object + base64 files
+                try {
+                    const fd = new FormData(form);
+                    const payload = {
+                        userId:     app.state.userId || '',
+                        modId:      fd.get('modId') || '',
+                        password:   fd.get('password') || '',
+                        title:      fd.get('title') || '',
+                        subject:    fd.get('subject') || '',
+                        grade:      fd.get('grade') || '',
+                        quarter:    fd.get('quarter') || 'Q1',
+                        expiration: fd.get('expiration') || '',
+                        youtubeUrl: fd.get('youtubeUrl') || '',
+                        isActive:   fd.get('isActive') === 'on' || fd.get('isActive') === 'true'
+                    };
+
+                    const readFileAsBase64 = (file) => new Promise((res) => {
+                        if (!file || file.size === 0) { res(null); return; }
+                        const reader = new FileReader();
+                        reader.onload = (e) => res({ data: e.target.result.split(',')[1], mimeType: file.type, name: file.name });
+                        reader.readAsDataURL(file);
+                    });
+
+                    payload.contentFile = await readFileAsBase64(fd.get('contentFile'));
+                    payload.appFile     = await readFileAsBase64(fd.get('appFile'));
+                    payload.quizFile    = fd.get('quizFile') && fd.get('quizFile').size > 0
+                        ? await (new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsText(fd.get('quizFile')); }))
+                        : null;
+
+                    BackEndService.call('updateModule', [payload]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                } catch (err) {
+                    callback({ success: false, error: err.toString() });
+                }
+            },
+
+            deleteModule(modId, password, callback) {
+                const userId = app.state.userId;
+                BackEndService.call('deleteModule', [userId, password, modId]).then(callback);
             },
 
             async register(firstName, lastName, grade, section, password, classCode, username, gender, callback) {
@@ -2216,18 +2290,29 @@ v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarte
                             <div class="border-t border-slate-100 pt-2 mt-2"></div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Video)</label>
-                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" required class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Video / YouTube)</label>
+                                <div class="flex flex-col gap-2">
+                                    <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                    <div class="flex items-center gap-2 px-1">
+                                        <div class="h-px bg-slate-100 flex-1"></div>
+                                        <span class="text-[10px] font-bold text-slate-300 uppercase">OR</span>
+                                        <div class="h-px bg-slate-100 flex-1"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <i class="ph-bold ph-youtube-logo absolute left-3 top-1/2 -translate-y-1/2 text-red-500"></i>
+                                        <input type="text" name="youtubeUrl" placeholder="Paste YouTube Link (e.g. https://youtu.be/...)" class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:border-red-500 focus:bg-white focus:outline-none transition-all">
+                                    </div>
+                                </div>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Activity Sheet (PDF / HTML)</label>
-                                <input type="file" name="appFile" accept="application/pdf,text/html,.html" required class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                <input type="file" name="appFile" accept="application/pdf,text/html,.html" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Quiz Data (CSV) <span class="text-xs font-normal text-brand-600 block mt-1 normal-case">Download the template above. It is the ONLY format accepted.</span></label>
-                                <input type="file" name="quizFile" accept=".csv" required class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent-50 file:text-accent-700 hover:file:bg-accent-100">
+                                <input type="file" name="quizFile" accept=".csv" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent-50 file:text-accent-700 hover:file:bg-accent-100">
                             </div>
 
                             <button type="submit" id="submitBtn" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all mt-4">
@@ -2243,6 +2328,16 @@ v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarte
                             const btn = document.getElementById('submitBtn');
                             btn.disabled = true;
                             btn.innerHTML = '<div class="spinner w-6 h-6 border-2"></div> Uploading...';
+
+                            // Inject userId so the backend can verify teacher access
+                            let uidField = form.querySelector('input[name="userId"]');
+                            if (!uidField) {
+                                uidField = document.createElement('input');
+                                uidField.type = 'hidden';
+                                uidField.name = 'userId';
+                                form.appendChild(uidField);
+                            }
+                            uidField.value = app.state.userId || '';
 
                             // Safety timeout: If no response in 5 minutes, show error
                             const uploadTimeout = setTimeout(() => {
@@ -2863,79 +2958,203 @@ v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarte
                     modal.classList.remove('hidden');
                 },
 
-                // TEACHER: SHOW SETTINGS MODAL
+                // TEACHER: SHOW SETTINGS MODAL (Enhanced with Full Edit & Security)
                 showSettingsModal(modId) {
                     const m = app.state.data.modules.find(mod => mod.id === modId);
                     if (!m) return;
 
                     const isInactive = m.isActive === false || m.isActive === 'false';
                     const expVal = m.expiration ? new Date(m.expiration).toISOString().slice(0, 16) : '';
+                    
+                    const subjects = app.state.data.subjects || [];
+                    const datalistOpts = subjects.map(s => `<option value="${s}"></option>`).join('');
 
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
-                        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col animate-[scaleIn_0.3s_ease]">
+                        <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-[scaleIn_0.3s_ease] max-h-[90vh]">
                             <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                                 <div>
-                                    <h3 class="font-bold text-slate-800 text-lg">Module Settings</h3>
-                                    <p class="text-xs text-slate-500 line-clamp-1">${m.title}</p>
+                                    <h3 class="font-bold text-slate-800 text-lg">Edit Module</h3>
+                                    <p class="text-xs text-slate-500 line-clamp-1">Modify module details and security settings</p>
                                 </div>
                                 <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
                                     <i class="ph-bold ph-x"></i>
                                 </button>
                             </div>
                             
-                            <div class="p-6 space-y-6">
-                                <!-- Status Toggle -->
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h4 class="font-bold text-slate-800">Module Status</h4>
-                                        <p class="text-xs text-slate-500">Enable or disable student access</p>
+                            <form id="editModuleForm" class="flex-1 overflow-y-auto">
+                                <input type="hidden" name="userId" value="${app.state.userId || ''}">
+                                <input type="hidden" name="modId" value="${modId}">
+                                
+                                <div class="p-6 space-y-5">
+                                    <!-- BASIC INFO -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="md:col-span-2">
+                                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Module Title</label>
+                                            <input type="text" name="title" value="${m.title}" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-all text-sm font-medium">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Subject</label>
+                                            <input type="text" name="subject" value="${m.subject}" list="editSubjectOptions" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-all text-sm">
+                                            <datalist id="editSubjectOptions">${datalistOpts}</datalist>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Grade</label>
+                                                <select name="grade" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
+                                                    <option ${m.grade == '7' ? 'selected' : ''}>7</option>
+                                                    <option ${m.grade == '8' ? 'selected' : ''}>8</option>
+                                                    <option ${m.grade == '9' ? 'selected' : ''}>9</option>
+                                                    <option ${m.grade == '10' ? 'selected' : ''}>10</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Quarter</label>
+                                                <select name="quarter" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
+                                                    <option ${m.quarter == 'Q1' ? 'selected' : ''}>Q1</option>
+                                                    <option ${m.quarter == 'Q2' ? 'selected' : ''}>Q2</option>
+                                                    <option ${m.quarter == 'Q3' ? 'selected' : ''}>Q3</option>
+                                                    <option ${m.quarter == 'Q4' ? 'selected' : ''}>Q4</option>
+                                                    <option ${m.quarter == 'Summer' ? 'selected' : ''}>Summer</option>
+                                                    <option ${m.quarter == 'Tutorials' ? 'selected' : ''}>Tutorials</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="settings-active" class="sr-only peer" ${!isInactive ? 'checked' : ''}>
-                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                                    </label>
-                                </div>
 
-                                <div class="border-t border-slate-100"></div>
+                                    <div class="h-px bg-slate-100"></div>
 
-                                <!-- Expiration Date -->
-                                <div>
-                                    <h4 class="font-bold text-slate-800 mb-1">Expiration Date</h4>
-                                    <p class="text-xs text-slate-500 mb-3">After this date, students cannot access the module.</p>
-                                    <input type="datetime-local" id="settings-expiration" value="${expVal}" class="w-full p-3 rounded-xl bg-white border border-slate-200 focus:border-brand-500 text-sm">
+                                    <!-- RE-UPLOAD ASSETS -->
+                                    <div class="space-y-4">
+                                        <h4 class="text-xs font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
+                                            <i class="ph-bold ph-files text-brand-600"></i> Re-upload Assets (Optional)
+                                        </h4>
+                                        
+                                        <div>
+                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Video/HTML/YouTube)</label>
+                                            <div class="flex flex-col gap-2">
+                                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                                <div class="relative">
+                                                    <i class="ph-bold ph-youtube-logo absolute left-3 top-1/2 -translate-y-1/2 text-red-500"></i>
+                                                    <input type="text" name="youtubeUrl" value="${m.contentType === 'youtube' ? m.contentId : ''}" placeholder="Or update YouTube Link..." class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:border-red-500 focus:outline-none">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Activity Sheet (PDF/HTML)</label>
+                                                <input type="file" name="appFile" accept="application/pdf,text/html,.html" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Quiz Data (CSV)</label>
+                                                <input type="file" name="quizFile" accept=".csv" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="h-px bg-slate-100"></div>
+
+                                    <!-- STATUS & EXPIRATION -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                        <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                            <div>
+                                                <h4 class="text-xs font-bold text-slate-800">Module Status</h4>
+                                                <p class="text-[10px] text-slate-500">Active Access</p>
+                                            </div>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" name="isActive" id="settings-active" class="sr-only peer" ${!isInactive ? 'checked' : ''}>
+                                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                                            </label>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-slate-800 mb-1">Expiration Date</h4>
+                                            <input type="datetime-local" name="expiration" id="settings-expiration" value="${expVal}" class="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 text-xs">
+                                        </div>
+                                    </div>
+
+                                    <!-- SECURITY VALIDATION -->
+                                    <div class="bg-brand-50 p-4 rounded-xl border border-brand-100 mt-2">
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <i class="ph-fill ph-lock-keyhole text-brand-600"></i>
+                                            <span class="text-xs font-black uppercase tracking-widest text-brand-700">Password Required</span>
+                                        </div>
+                                        <input type="password" name="password" id="teacher-pass-confirm" placeholder="Enter your teacher password to confirm" required class="w-full p-3 rounded-xl bg-white border border-brand-200 focus:border-brand-500 focus:outline-none shadow-inner text-sm">
+                                    </div>
+
+                                    <!-- DELETE ACTION -->
+                                    <div class="pt-2">
+                                        <button type="button" id="delete-mod-btn" class="w-full py-2.5 rounded-xl border border-red-200 text-red-500 text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2">
+                                            <i class="ph-bold ph-trash"></i> Delete This Module Permanently
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            </form>
                             
-                            <div class="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end gap-2 shrink-0">
-                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800">Cancel</button>
-                                <button id="settings-save-btn" class="px-4 py-2 bg-brand-600 text-white shadow-sm rounded-lg text-sm font-bold hover:bg-brand-700 flex items-center gap-2">
-                                    <i class="ph-bold ph-floppy-disk"></i> Save Changes
+                            <div class="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between items-center shrink-0">
+                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-5 py-2.5 text-slate-500 text-sm font-bold hover:text-slate-800 transition-colors">Cancel</button>
+                                <button id="settings-save-btn" class="px-8 py-2.5 bg-brand-600 text-white shadow-lg shadow-brand-500/20 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-brand-700 transition-all flex items-center gap-2">
+                                    <i class="ph-bold ph-check"></i> Save Changes
                                 </button>
                             </div>
                         </div>
                     `;
                     modal.classList.remove('hidden');
 
-                    // Save Handler
-                    document.getElementById('settings-save-btn').onclick = function() {
+                    // DELETE HANDLER
+                    document.getElementById('delete-mod-btn').onclick = function() {
+                        const pass = document.getElementById('teacher-pass-confirm').value;
+                        if (!pass) {
+                            app.showToast("Please enter your password to delete.", "error");
+                            document.getElementById('teacher-pass-confirm').focus();
+                            return;
+                        }
+
+                        if (!confirm("Are you SURE you want to delete this module? This action cannot be undone.")) return;
+
                         const btn = this;
-                        const isActive = document.getElementById('settings-active').checked;
-                        const expInput = document.getElementById('settings-expiration').value;
-                        const expiration = expInput ? new Date(expInput).toISOString() : '';
-
+                        const originalHtml = btn.innerHTML;
                         btn.disabled = true;
-                        btn.innerHTML = '<div class="spinner w-4 h-4 border-2"></div> Saving...';
+                        btn.innerHTML = '<div class="spinner w-4 h-4 border-2 border-red-500"></div> Deleting...';
 
-                        DataService.toggleModuleStatus(modId, expiration, isActive, (res) => {
-                            if(res.success) {
-                                app.showToast("Settings saved!", "success");
+                        DataService.deleteModule(modId, pass, (res) => {
+                            if (res.success) {
+                                app.showToast("Module deleted successfully", "success");
                                 modal.classList.add('hidden');
-                                app.refreshData(); // Re-render to show updated status
+                                app.refreshData();
                             } else {
-                                app.showToast("Failed to save: " + res.error, "error");
+                                app.showToast(res.error || "Failed to delete. Check password.", "error");
                                 btn.disabled = false;
-                                btn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save Changes';
+                                btn.innerHTML = originalHtml;
+                            }
+                        });
+                    };
+
+                    // SAVE HANDLER
+                    document.getElementById('settings-save-btn').onclick = function() {
+                        const form = document.getElementById('editModuleForm');
+                        const pass = document.getElementById('teacher-pass-confirm').value;
+                        
+                        if (!pass) {
+                            app.showToast("Please enter your password to save changes.", "error");
+                            document.getElementById('teacher-pass-confirm').focus();
+                            return;
+                        }
+
+                        const btn = this;
+                        const originalHtml = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.innerHTML = '<div class="spinner w-4 h-4 border-2"></div> Processing...';
+
+                        DataService.updateModule(form, (res) => {
+                            if(res.success) {
+                                app.showToast("Module updated successfully!", "success");
+                                modal.classList.add('hidden');
+                                app.refreshData();
+                            } else {
+                                app.showToast(res.error || "Failed to update. Check password.", "error");
+                                btn.disabled = false;
+                                btn.innerHTML = originalHtml;
                             }
                         });
                     };
@@ -3615,39 +3834,38 @@ v2.4.1 - March 19, 2026 10:17 AM: [FEATURE] Added Summer and Tutorials to Quarte
                         }
 
                         if (docType === 'video') {
-                            // VIDEO PLAYER — HTML5 <video> with direct Drive URL
-                            // Uses /uc?export=download URL which works as a streamable src
-                            const videoSrc = 'https://drive.google.com/uc?export=download&id=' + fileId;
+                            // VIDEO PLAYER — Use preview link for better streaming compatibility
+                            const videoSrc = `https://drive.google.com/file/d/${fileId}/preview`;
                             content.innerHTML = `
-                                <div class="w-full h-full relative bg-black flex items-center justify-center">
-                                    <video id="videoPlayer" class="w-full h-full" controls controlslist="nodownload" preload="auto" playsinline>
-                                        <source src="${videoSrc}" type="video/mp4">
-                                        Your browser does not support video playback.
-                                    </video>
-                                    <div id="pdf-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 pointer-events-none">
+                                <div class="w-full h-full relative bg-black">
+                                    <iframe src="${videoSrc}" class="w-full h-full border-0" allow="autoplay"></iframe>
+                                    <div id="pdf-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 pointer-events-none transition-opacity duration-500">
                                         <div class="spinner w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                                        <p class="text-sm font-medium text-white/80">Loading Video...</p>
+                                        <p class="text-sm font-medium text-white/80">Loading Video Stream...</p>
                                     </div>
                                 </div>
                             `;
-                            // Hide loading overlay once video can play
-                            const videoEl = document.getElementById('videoPlayer');
-                            if (videoEl) {
-                                videoEl.addEventListener('canplay', () => {
-                                    const loadingEl = document.getElementById('pdf-loading');
-                                    if (loadingEl) loadingEl.classList.add('hidden');
-                                });
-                                videoEl.addEventListener('error', () => {
-                                    app.showToast("Failed to load video. Try opening it in a new tab.", 'error');
-                                    const loadingEl = document.getElementById('pdf-loading');
-                                    if (loadingEl) loadingEl.innerHTML = `
-                                        <p class="text-red-400 text-sm font-medium mb-3">Video failed to load.</p>
-                                        <a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" class="bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-white/30 transition-colors">
-                                            <i class="ph-bold ph-arrow-square-out mr-1"></i> Open in Drive
-                                        </a>
-                                    `;
-                                });
-                            }
+                            // Auto-hide loading after a few seconds as iframe doesn't always fire onload for Drive previews securely
+                            setTimeout(() => {
+                                const el = document.getElementById('pdf-loading');
+                                if(el) el.style.opacity = '0';
+                                setTimeout(() => el?.remove(), 500);
+                            }, 3000);
+
+                        } else if (docType === 'youtube') {
+                            // YOUTUBE PLAYER — Extract ID and embed
+                            let ytId = fileId;
+                            if (fileId.includes('v=')) ytId = fileId.split('v=')[1].split('&')[0];
+                            else if (fileId.includes('youtu.be/')) ytId = fileId.split('youtu.be/')[1].split('?')[0];
+                            
+                            const embedUrl = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`;
+                            content.innerHTML = `
+                                <div class="w-full h-full bg-black">
+                                    <iframe src="${embedUrl}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                </div>
+                            `;
+                            // For content type, we want to enable the "Mark as Read" button sooner for videos
+                            if (isContent) updateProgress(100); 
 
                         } else if (docType === 'html') {
                             // HTML Viewer Interface
