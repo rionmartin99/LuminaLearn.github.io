@@ -1,6 +1,6 @@
 <!--
 Update Log:
-v2.6.8 - 2026-03-23 10:26 AM: [FIX] YouTube embed: fixed onError event listener (was 'infoDelivery', now 'onError'), added always-visible "Open in YouTube" pill button, added /shorts/ and /embed/ URL format support.
+v2.6.9 - 2026-03-23 10:36 AM: [REMOVAL] Dropped YouTube URL feature entirely. Video content now uses direct file upload only (PDF, HTML, MP4). PDF hyperlinks to YouTube still work via Google Drive preview.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
@@ -734,7 +734,7 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                         grade: fd.get('grade') || '',
                         quarter: fd.get('quarter') || 'Q1',
                         expiration: fd.get('expiration') || '',
-                        youtubeUrl: fd.get('youtubeUrl') || ''
+                        youtubeUrl: ''
                     };
 
                     const readFileAsBase64 = (file) => new Promise((res) => {
@@ -775,7 +775,7 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                         grade:      fd.get('grade') || '',
                         quarter:    fd.get('quarter') || 'Q1',
                         expiration: fd.get('expiration') || '',
-                        youtubeUrl: fd.get('youtubeUrl') || '',
+                        youtubeUrl: '',
                         isActive:   fd.get('isActive') === 'on' || fd.get('isActive') === 'true'
                     };
 
@@ -2290,19 +2290,8 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                             <div class="border-t border-slate-100 pt-2 mt-2"></div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Video / YouTube)</label>
-                                <div class="flex flex-col gap-2">
-                                    <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
-                                    <div class="flex items-center gap-2 px-1">
-                                        <div class="h-px bg-slate-100 flex-1"></div>
-                                        <span class="text-[10px] font-bold text-slate-300 uppercase">OR</span>
-                                        <div class="h-px bg-slate-100 flex-1"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <i class="ph-bold ph-youtube-logo absolute left-3 top-1/2 -translate-y-1/2 text-red-500"></i>
-                                        <input type="text" name="youtubeUrl" placeholder="Paste YouTube Link (e.g. https://youtu.be/...)" class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:border-red-500 focus:bg-white focus:outline-none transition-all">
-                                    </div>
-                                </div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Video)</label>
+                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
                             <div>
@@ -3031,14 +3020,8 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                         </h4>
                                         
                                         <div>
-                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Video/HTML/YouTube)</label>
-                                            <div class="flex flex-col gap-2">
-                                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                                                <div class="relative">
-                                                    <i class="ph-bold ph-youtube-logo absolute left-3 top-1/2 -translate-y-1/2 text-red-500"></i>
-                                                    <input type="text" name="youtubeUrl" value="${m.contentType === 'youtube' ? m.contentId : ''}" placeholder="Or update YouTube Link..." class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:border-red-500 focus:outline-none">
-                                                </div>
-                                            </div>
+                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Video/HTML)</label>
+                                            <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                                         </div>
                                         
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3852,66 +3835,7 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                                 setTimeout(() => el?.remove(), 500);
                             }, 3000);
 
-                        } else if (docType === 'youtube') {
-                            // YOUTUBE PLAYER — Extract ID and embed
-                            let ytId = fileId ? fileId.trim() : '';
-                            // Support all common YouTube URL formats
-                            if (ytId.includes('v='))              ytId = ytId.split('v=')[1].split('&')[0].split('#')[0];
-                            else if (ytId.includes('youtu.be/'))  ytId = ytId.split('youtu.be/')[1].split('?')[0].split('#')[0];
-                            else if (ytId.includes('/shorts/'))   ytId = ytId.split('/shorts/')[1].split('?')[0].split('#')[0];
-                            else if (ytId.includes('/embed/'))    ytId = ytId.split('/embed/')[1].split('?')[0].split('#')[0];
-                            // else assume it's already a raw video ID
 
-                            const ytOrigin = encodeURIComponent(location.origin || 'https://rionmartin99.github.io');
-                            const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&enablejsapi=1&origin=${ytOrigin}`;
-                            const watchUrl = `https://www.youtube.com/watch?v=${ytId}`;
-
-                            content.innerHTML = `
-                                <div class="w-full h-full bg-black relative" id="yt-wrapper">
-                                    <iframe id="yt-iframe" src="${embedUrl}" class="w-full h-full border-0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowfullscreen>
-                                    </iframe>
-
-                                    <!-- Always-visible escape hatch in top-right corner -->
-                                    <a href="${watchUrl}" target="_blank" id="yt-open-btn"
-                                        class="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-black/70 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm transition-all duration-200"
-                                        title="Open in YouTube">
-                                        <i class="ph-bold ph-youtube-logo text-red-400"></i> Open in YouTube
-                                    </a>
-
-                                    <!-- Full fallback shown when YouTube reports embed is blocked -->
-                                    <div id="yt-fallback" class="absolute inset-0 bg-slate-900 flex-col items-center justify-center text-center px-6" style="display:none">
-                                        <i class="ph-bold ph-youtube-logo text-red-500 text-5xl mb-4"></i>
-                                        <p class="text-white font-bold text-lg mb-1">This video can't be embedded</p>
-                                        <p class="text-slate-400 text-sm mb-6">The video owner has disabled playback on external sites.</p>
-                                        <a href="${watchUrl}" target="_blank"
-                                            class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition-all text-sm">
-                                            <i class="ph-bold ph-arrow-square-out"></i> Watch on YouTube
-                                        </a>
-                                    </div>
-                                </div>
-                            `;
-
-                            // Listen for YouTube IFrame API error events
-                            // YouTube sends: { event: 'onError', info: <errorCode> }
-                            // Error codes 100, 101, 150 = video not embeddable / not found
-                            const ytErrorHandler = (event) => {
-                                try {
-                                    const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                                    if (msg && msg.event === 'onError') {
-                                        const fb = document.getElementById('yt-fallback');
-                                        if (fb) fb.style.display = 'flex';
-                                    }
-                                } catch(e) { /* ignore non-JSON messages from other origins */ }
-                            };
-                            window.addEventListener('message', ytErrorHandler);
-
-                            // For content type, mark as read sooner for videos
-                            if (isContent) updateProgress(100);
-
-
-                        } else if (docType === 'html') {
                             // HTML Viewer Interface
                             content.innerHTML = `
                                 <div class="w-full h-full relative">
