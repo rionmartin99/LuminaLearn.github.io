@@ -1,6 +1,6 @@
 <!--
 Update Log:
-v2.6.6 - 2026-03-23 09:53 AM: [FIX] updateModule also suffered from the same JSON-serialization issue. Fixed by extracting all form fields + base64 files into a plain object before sending.
+v2.6.7 - 2026-03-23 10:17 AM: [FIX] YouTube embed now uses youtube-nocookie.com + origin param. Added fallback overlay with "Open in YouTube" button when video has embedding disabled.
 v2.6.3 - 2026-03-23 09:00 AM: [SECURITY] Added teacher password validation for module edit/delete. [FEATURE] Enhanced module management (title change, asset re-upload). [FIX] Resolved video playback issues & added YouTube support.
 v2.6.2 - 2026-03-20 11:25 PM: [REFINEMENT] Student View: Bypassed module locks for teachers to allow unrestricted testing.
 v2.6.1 - 2026-03-20 09:30 PM: [FEATURE] Enhanced Student View: Full interaction (Content, Activity, Quiz) without progress saving.
@@ -3857,15 +3857,50 @@ v2.5.0 - 2026-03-19 03:58 PM: [FEATURE] Added Gender capture and sorted CSV down
                             let ytId = fileId;
                             if (fileId.includes('v=')) ytId = fileId.split('v=')[1].split('&')[0];
                             else if (fileId.includes('youtu.be/')) ytId = fileId.split('youtu.be/')[1].split('?')[0];
-                            
-                            const embedUrl = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`;
+                            // Strip any trailing fragment
+                            ytId = ytId.split('#')[0].trim();
+
+                            const ytOrigin = encodeURIComponent(location.origin || 'https://rionmartin99.github.io');
+                            const embedUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&enablejsapi=1&origin=${ytOrigin}`;
+                            const watchUrl = `https://www.youtube.com/watch?v=${ytId}`;
+
                             content.innerHTML = `
-                                <div class="w-full h-full bg-black">
-                                    <iframe src="${embedUrl}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                <div class="w-full h-full bg-black relative" id="yt-wrapper">
+                                    <iframe id="yt-iframe" src="${embedUrl}" class="w-full h-full border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                    <!-- Fallback shown if YouTube reports an embed error -->
+                                    <div id="yt-fallback" class="absolute inset-0 bg-slate-900 flex-col items-center justify-center text-center px-6 hidden" style="display:none">
+                                        <i class="ph-bold ph-youtube-logo text-red-500 text-5xl mb-4"></i>
+                                        <p class="text-white font-bold text-lg mb-1">This video can't be embedded</p>
+                                        <p class="text-slate-400 text-sm mb-6">The video owner has disabled playback on external sites.</p>
+                                        <a href="${watchUrl}" target="_blank"
+                                            class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition-all text-sm">
+                                            <i class="ph-bold ph-arrow-square-out"></i> Open in YouTube
+                                        </a>
+                                    </div>
                                 </div>
                             `;
-                            // For content type, we want to enable the "Mark as Read" button sooner for videos
-                            if (isContent) updateProgress(100); 
+
+                            // Listen for YouTube IFrame API error events (codes 100, 101, 150 = not embeddable)
+                            const ytErrorHandler = (event) => {
+                                try {
+                                    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                                    if (data && data.event === 'infoDelivery' && data.info && data.info.error) {
+                                        const errCode = data.info.error;
+                                        if ([100, 101, 150].includes(errCode)) {
+                                            const fb = document.getElementById('yt-fallback');
+                                            if (fb) { fb.style.display = 'flex'; }
+                                        }
+                                    }
+                                } catch(e) { /* ignore parse errors from other iframes */ }
+                            };
+                            window.addEventListener('message', ytErrorHandler);
+
+                            // For content type, mark as read sooner for videos
+                            if (isContent) updateProgress(100);
+
 
                         } else if (docType === 'html') {
                             // HTML Viewer Interface
