@@ -1,6 +1,7 @@
 <!--
-v3.0.7
+v3.1.0
 Update Log:
+v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index (CTT) tracking and UI.
 v3.0.7 - 2026-03-25 03:40 PM: [UI] Added upload limit notice (35MB) to inform teachers.
 v3.0.6 - 2026-03-25 03:30 PM: [FIX] Switched to fetch for better CORS resilience on GitHub Pages.
 v3.0.5 - 2026-03-25 03:10 PM: [FIX] Added 35MB upload size validation and improved network error reporting.
@@ -707,8 +708,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 }
             },
 
-            async submitProgress(modId, step, value, studentInfo, points, callback) {
+            async submitProgress(modId, step, value, studentInfo, points, itemAnalysis, callback) {
                 const userId = app.state.userId;
+                if (typeof itemAnalysis === 'function') { callback = itemAnalysis; itemAnalysis = null; }
                 if (typeof points === 'function') { callback = points; points = null; }
                 if (typeof studentInfo === 'function') { callback = studentInfo; studentInfo = null; }
 
@@ -720,7 +722,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         return;
                     }
 
-                    await BackEndService.call('saveProgress', [userId, modId, step, value, studentInfo, points]);
+                    await BackEndService.call('saveProgress', [userId, modId, step, value, studentInfo, points, itemAnalysis]);
                     if (callback) callback();
                 } catch (err) {
                     console.error("Save Progress Error:", err);
@@ -3097,6 +3099,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                             <div class="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 flex justify-between items-center">
                                 <span class="text-xs font-bold text-slate-400 uppercase">Total: ${rows.length} Students</span>
                                 <div class="flex gap-2">
+                                    <button onclick="app.components.showItemAnalysisModal('${modId}')" class="px-4 py-2 bg-amber-50 border border-amber-100 shadow-sm rounded-lg text-sm font-bold text-amber-600 hover:bg-amber-100 flex items-center gap-2">
+                                        <i class="ph ph-chart-bar"></i> Item Analysis
+                                    </button>
                                     <button onclick="app.handlers.downloadResultsCSV('${modId}')" class="px-4 py-2 bg-brand-50 border border-brand-100 shadow-sm rounded-lg text-sm font-bold text-brand-600 hover:bg-brand-100 flex items-center gap-2"><i class="ph ph-download-simple"></i> Download CSV</button>
                                     <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800">Close</button>
                                 </div>
@@ -3104,6 +3109,168 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         </div>
                     `;
                     modal.classList.remove('hidden');
+                },
+
+                // TEACHER: SHOW ITEM ANALYSIS MODAL
+                async showItemAnalysisModal(modId) {
+                    const m = app.state.data.modules.find(mod => mod.id === modId);
+                    const modal = document.getElementById('modal-overlay');
+                    
+                    // Initial Loading State
+                    modal.innerHTML = `
+                        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease]">
+                            <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-lg">Item Analysis Report</h3>
+                                    <p class="text-xs text-slate-500">${m.title} &bull; Difficulty & Discrimination Index</p>
+                                </div>
+                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+                                    <i class="ph-bold ph-x"></i>
+                                </button>
+                            </div>
+                            <div class="flex-1 flex flex-col items-center justify-center py-20 bg-slate-50">
+                                <div class="spinner mb-4"></div>
+                                <p class="text-sm text-slate-500 font-medium">Calculating metrics...</p>
+                            </div>
+                        </div>
+                    `;
+                    modal.classList.remove('hidden');
+
+                    try {
+                        const res = await BackEndService.call('getItemAnalysis', [modId]);
+                        if (!res || !res.success) throw new Error(res?.error || "Failed to fetch analysis");
+
+                        const items = res.analysis;
+                        
+                        modal.innerHTML = `
+                            <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease] overflow-hidden">
+                                <div class="p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-12 h-12 bg-amber-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20">
+                                            <i class="ph-fill ph-chart-bar"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-display font-black text-slate-800 text-xl uppercase tracking-tight">Item Analysis Report</h3>
+                                            <p class="text-xs text-slate-500 font-medium">${m.title} &bull; ${res.totalStudents} Students Analyzed</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="w-10 h-10 flex items-center justify-center hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+                                        <i class="ph-bold ph-x text-xl"></i>
+                                    </button>
+                                </div>
+                                
+                                <div class="overflow-y-auto flex-1 p-6">
+                                    <!-- HEADER STATS -->
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reliability</p>
+                                            <p class="text-lg font-bold text-slate-800">High</p>
+                                        </div>
+                                         <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Standard</p>
+                                            <p class="text-lg font-bold text-slate-800">DepEd</p>
+                                        </div>
+                                         <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Method</p>
+                                            <p class="text-lg font-bold text-slate-800">CTT 27%</p>
+                                        </div>
+                                         <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Beta</p>
+                                            <p class="text-lg font-bold text-slate-800">v3.1.0</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="overflow-x-auto rounded-2xl border border-slate-100">
+                                        <table class="w-full text-sm text-left border-collapse">
+                                            <thead class="bg-slate-900 text-white font-bold uppercase tracking-wider text-[10px]">
+                                                <tr>
+                                                    <th class="px-4 py-4 border-r border-slate-800">#</th>
+                                                    <th class="px-4 py-4 min-w-[200px]">Question Snippet</th>
+                                                    <th class="px-4 py-4 text-center">Correct ($R$)</th>
+                                                    <th class="px-4 py-4 text-center">Diff. Index ($P$)</th>
+                                                    <th class="px-4 py-4 text-center">Disc. Index ($D$)</th>
+                                                    <th class="px-4 py-4">Interpretation</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                ${items.map((it, i) => `
+                                                    <tr class="hover:bg-slate-50/50 transition-colors">
+                                                        <td class="px-4 py-4 font-mono font-bold text-slate-400 border-r border-slate-100">${i + 1}</td>
+                                                        <td class="px-4 py-4">
+                                                            <p class="text-slate-800 font-medium line-clamp-1 text-xs" title="${it.question}">${it.question}</p>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-center">
+                                                            <span class="inline-block px-2 py-1 bg-slate-100 rounded-lg font-bold text-slate-600">${it.correctResponses}</span>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-center">
+                                                            <div class="flex flex-col items-center">
+                                                                <span class="font-black text-slate-800">${it.difficultyIndex.toFixed(2)}</span>
+                                                                <span class="text-[8px] font-bold text-slate-400 uppercase">${it.difficultyLabel}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-center">
+                                                            <div class="flex flex-col items-center">
+                                                                <span class="font-black text-slate-800">${it.discriminationIndex.toFixed(2)}</span>
+                                                                <span class="text-[8px] font-bold text-slate-400 uppercase">${it.discriminationLabel}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-4 py-4">
+                                                            <span class="inline-flex px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight shadow-sm border ${it.action === 'Retain' ? 'bg-green-50 text-green-700 border-green-100' : (it.action === 'Revise' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100')}">
+                                                                ${it.interpretation}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- LEGEND -->
+                                    <div class="mt-8 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                                        <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <i class="ph-bold ph-info text-amber-500"></i> Pedagogical Guide
+                                        </h4>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-[10px] leading-relaxed">
+                                            <div>
+                                                <p class="font-bold text-slate-700 mb-2 uppercase">Difficulty Index ($P$)</p>
+                                                <ul class="space-y-1.5 text-slate-500">
+                                                    <li><strong class="text-slate-700">0.00 - 0.20:</strong> Very Difficult (Revise/Discard)</li>
+                                                    <li><strong class="text-slate-700">0.21 - 0.80:</strong> Moderate (Retain)</li>
+                                                    <li><strong class="text-slate-700">0.81 - 1.00:</strong> Very Easy (Discard)</li>
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <p class="font-bold text-slate-700 mb-2 uppercase">Discrimination Index ($D$)</p>
+                                                <ul class="space-y-1.5 text-slate-500">
+                                                    <li><strong class="text-slate-700">0.40+:</strong> Very Good Item</li>
+                                                    <li><strong class="text-slate-700">0.20 - 0.39:</strong> Marginal (Revise)</li>
+                                                    <li><strong class="text-slate-700">Below 0.19:</strong> Poor Item (Discard)</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 border-t border-slate-100 bg-white shrink-0 flex justify-between items-center">
+                                    <div class="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase">
+                                        <i class="ph-bold ph-check-circle text-green-500"></i> DepEd Order No. 8, s. 2015 Aligned
+                                    </div>
+                                    <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-8 py-3 bg-slate-900 text-white border border-slate-800 shadow-xl rounded-2xl text-sm font-bold hover:bg-black transition-all transform hover:-translate-y-1 active:translate-y-0">Close Report</button>
+                                </div>
+                            </div>
+                        `;
+                    } catch (err) {
+                        modal.innerHTML = `
+                            <div class="bg-white w-full max-w-sm rounded-2xl p-10 text-center animate-[scaleIn_0.3s_ease]">
+                                <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl shadow-lg shadow-red-500/10">
+                                    <i class="ph-bold ph-warning"></i>
+                                </div>
+                                <h3 class="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">Analysis Failed</h3>
+                                <p class="text-slate-500 mb-8 text-sm font-medium leading-relaxed">${err.message || "An unexpected error occurred while calculating indices."}</p>
+                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-xl shadow-slate-900/20 hover:bg-black transition-all">Go Back</button>
+                            </div>
+                        `;
+                    }
                 },
 
                 // TEACHER: SHOW ACTIVITY SUBMISSIONS MODAL
@@ -3902,7 +4069,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                    <button onclick="navigator.clipboard.writeText('09158589344').then(() => { app.showToast('Number copied!', 'success'); setTimeout(() => { window.location.href='gcash://express_send?number=09158589344&amount=0&notes=Support+RION'; }, 500); })" 
                                       class="bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-widest shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
                                        <i class="ph-bold ph-copy text-sm"></i>
-                                       GCash
+                                       Support
                                     </button>
                                </div>
                                <p class="text-[8px] text-slate-400 italic leading-tight mt-2 text-center">
@@ -5342,8 +5509,11 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         return array;
                     };
 
-                    const originalQuizData = JSON.parse(JSON.stringify(mod.quiz));
-                    const quizData = shuffleArray(originalQuizData).map(q => {
+                    // Track original indices for item analysis
+                    const originalQuizData = mod.quiz.map((q, idx) => ({ ...q, originalIndex: idx }));
+                    app.state.currentQuizResults = new Array(originalQuizData.length).fill(0);
+
+                    const quizData = shuffleArray(JSON.parse(JSON.stringify(originalQuizData))).map(q => {
                         const optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, isCorrect: idx === q.a }));
                         const shuffledOptions = shuffleArray(optionsWithIndex);
                         return {
@@ -5362,9 +5532,10 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         if (currentQ >= quizData.length) {
                             const finalScore = Math.round((score / quizData.length) * 100);
 
-                            // SUBMIT WITH STUDENT INFO AND RAW POINTS
+                            // SUBMIT WITH STUDENT INFO, RAW POINTS, AND ITEM ANALYSIS
                             const pointsStr = `${score}/${quizData.length}`;
-                            DataService.submitProgress(modId, 'score', finalScore, app.state.studentInfo, pointsStr, () => {
+                            const analysisStr = JSON.stringify(app.state.currentQuizResults);
+                            DataService.submitProgress(modId, 'score', finalScore, app.state.studentInfo, pointsStr, analysisStr, () => {
                                 app.refreshData();
                             });
 
@@ -5431,6 +5602,8 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 clearInterval(questionTimer);
                                 // Auto-proceed logic (as if incorrect, so score does not increase)
                                 qEl.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+                                // Record timeout as 0 (incorrect) at the original question index
+                                app.state.currentQuizResults[q.originalIndex] = 0;
                                 setTimeout(() => {
                                     currentQ++;
                                     renderQ();
@@ -5448,6 +5621,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                                 const selected = parseInt(this.dataset.idx);
                                 const isCorrect = selected === q.a;
+
+                                // Record item result (1 for correct, 0 for incorrect) at the original question index
+                                app.state.currentQuizResults[q.originalIndex] = isCorrect ? 1 : 0;
 
                                 // Silent Score Update
                                 if (isCorrect) {
