@@ -1,12 +1,11 @@
 <!--
-v3.1.1
+v3.4.0
 Update Log:
+v3.4.0 - 2026-03-25 10:45 PM: [NEW] Phase 18: Integrated on-the-fly PDF conversion for .docx, .pptx, and images.
+v3.3.0 - 2026-03-25 10:45 PM: [NEW] Phase 17: CSV Item Analysis integration, UI refinements (button repositioning/removal).
+v3.2.0 - 2026-03-25 09:15 PM: [NEW] Phase 16: "Quiz" vs "Exam" terminology toggle and dynamic labelling across UI/CSV.
 v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent locking & NaN scores.
 v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index (CTT) tracking and UI.
-v3.0.7 - 2026-03-25 03:40 PM: [UI] Added upload limit notice (35MB) to inform teachers.
-v3.0.6 - 2026-03-25 03:30 PM: [FIX] Switched to fetch for better CORS resilience on GitHub Pages.
-v3.0.5 - 2026-03-25 03:10 PM: [FIX] Added 35MB upload size validation and improved network error reporting.
-v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from backend.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -2256,7 +2255,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 <button onclick="app.navigate('dashboard')" class="p-2 -ml-2 rounded-full hover:bg-slate-100"><i class="ph ph-arrow-left text-xl"></i></button>
                                 <div>
                                     <h2 class="font-display font-bold text-slate-900 leading-none">${m.title}</h2>
-                                    <p class="text-xs text-slate-500 mt-1">${m.subject} • ${m.quarter || 'Q1'}</p>
+                                    <p class="text-xs text-slate-500 mt-1">${m.subject} • ${m.quarter || 'Q1'} • ${m.modType || 'Quiz'}</p>
                                 </div>
                             </div>
                             ${showTeacherUI ? `
@@ -2417,8 +2416,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                     `;
                     content.appendChild(step2);
 
-                    // STEP 3: QUIZ
+                    // STEP 3: ASSESSMENT
                     const step3 = document.createElement('div');
+                    const modType = m.modType || 'Quiz';
                     // Unlock if App is Done OR Pending for Students, but TEACHER is always unlocked
                     const locked3 = (!isAppDone && !isAppPending) && !isTeacherMode;
                     step3.className = `p-5 rounded-2xl border transition-all ${locked3 ? 'border-slate-100 locked-pattern opacity-70' : 'border-accent-200 bg-orange-50/30 shadow-soft'}`;
@@ -2463,7 +2463,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                     if (showTeacherUI) {
                         quizContent = `
-                            <p class="text-sm text-slate-600 mb-4">View the results of all students who have taken this quiz.</p>
+                            <p class="text-sm text-slate-600 mb-4">View the results of all students who have taken this ${modType.toLowerCase()}.</p>
                             <button onclick="app.components.showModuleScores('${m.id}')" class="w-full bg-slate-900 py-3 rounded-xl text-white font-bold shadow-lg hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
                                 <i class="ph-bold ph-chart-bar"></i> View Class Results
                             </button>
@@ -2487,9 +2487,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         `;
                     } else if (!locked3) {
                         quizContent = `
-                            <p class="text-sm text-slate-600 mb-4">Take the quiz to assess your learning. Immediate feedback provided.</p>
+                            <p class="text-sm text-slate-600 mb-4">Take the ${modType.toLowerCase()} to assess your learning. Immediate feedback provided.</p>
                             <button onclick="app.handlers.startQuiz('${m.id}')" class="w-full bg-accent-500 py-3 rounded-xl text-white font-bold shadow-lg shadow-accent-500/30 hover:bg-accent-600 transition-all flex items-center justify-center gap-2">
-                                <i class="ph-bold ph-lightning"></i> Start Quiz
+                                <i class="ph-bold ph-lightning"></i> Start ${modType}
                             </button>
                         `;
                     }
@@ -2499,7 +2499,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                             <div class="w-8 h-8 rounded-full ${locked3 ? 'bg-slate-200 text-slate-400' : 'bg-accent-100 text-accent-600'} flex items-center justify-center font-bold">
                                 ${locked3 ? '<i class="ph-bold ph-lock"></i>' : '3'}
                             </div>
-                            <h3 class="font-bold text-slate-800">Assessment Quiz</h3>
+                            <h3 class="font-bold text-slate-800">${modType} Assessment</h3>
                         </div>
                         ${quizContent}
                         ${leaderboardHtml}
@@ -2522,10 +2522,10 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         <div class="flex justify-between items-start mb-2">
                             <h2 class="text-2xl font-display font-bold text-slate-800">Upload Module</h2>
                             <button onclick="app.handlers.downloadTemplate()" class="text-brand-600 text-xs font-bold bg-brand-50 px-3 py-2 rounded-lg hover:bg-brand-100 transition-colors">
-                                <i class="ph ph-download-simple mr-1"></i> Get Quiz Template
+                                <i class="ph ph-download-simple mr-1"></i> Get Template
                             </button>
                         </div>
-                        <p class="text-sm text-slate-500 mb-6">Upload learning materials. PDF for content, and CSV for the quiz logic.</p>
+                        <p class="text-sm text-slate-500 mb-6">Upload materials. PDF, Word, Powerpoint, or Images for content, and CSV for the quiz logic.</p>
                         
                         <form id="uploadForm" class="space-y-4">
                             <input type="hidden" name="userId" value="${app.state.userId || ''}">
@@ -2557,6 +2557,28 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 </div>
                             </div>
 
+                            <!-- TERMINOLOGY TOGGLE -->
+                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <i class="ph-bold ph-info text-slate-600"></i>
+                                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-widest">Terminology</h4>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-brand-600 px-2 py-0.5 bg-brand-50 rounded">Assessment Type</span>
+                                </div>
+                                <div class="flex p-1 bg-white border border-slate-200 rounded-xl">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="modType" value="Quiz" class="peer hidden" checked>
+                                        <div class="py-2 text-center rounded-lg text-xs font-bold transition-all peer-checked:bg-brand-500 peer-checked:text-white text-slate-500 hover:bg-slate-50">Quiz</div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="modType" value="Exam" class="peer hidden">
+                                        <div class="py-2 text-center rounded-lg text-xs font-bold transition-all peer-checked:bg-brand-500 peer-checked:text-white text-slate-500 hover:bg-slate-50">Exam</div>
+                                    </label>
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-2 italic text-center">Changes labels from "Quiz" to "Exam" for more formal assessments.</p>
+                            </div>
+
                             <div class="border-t border-slate-100 pt-2 mt-2"></div>
 
                             <div>
@@ -2566,18 +2588,18 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                             <div class="border-t border-slate-100 pt-2 mt-2"></div>
 
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Video)</label>
-                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                             <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / Word / PPT / Image / Video)</label>
+                                <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Activity Sheet (PDF / HTML)</label>
-                                <input type="file" name="appFile" accept="application/pdf,text/html,.html" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Activity Sheet (PDF / Word / PPT / Image)</label>
+                                <input type="file" name="appFile" accept="application/pdf,text/html,.html,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Quiz Data (CSV) <span class="text-xs font-normal text-brand-600 block mt-1 normal-case">Download the template above. It is the ONLY format accepted.</span></label>
+                             <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Assessment Data (CSV) <span class="text-xs font-normal text-brand-600 block mt-1 normal-case">Download the template above. It is the ONLY format accepted.</span></label>
                                 <input type="file" name="quizFile" accept=".csv" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent-50 file:text-accent-700 hover:file:bg-accent-100">
                             </div>
 
@@ -2700,7 +2722,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         </div>
 
                         <!-- ONLINE STUDENTS SECTION -->
-                        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 relative">
                             <div class="flex items-center justify-between mb-4">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
@@ -2711,7 +2733,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                         <p class="text-xs text-slate-500">Currently online (last 5 min).</p>
                                     </div>
                                 </div>
-                                <button onclick="app.handlers.refreshOnlineStudents()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh">
+                                <button onclick="app.handlers.refreshOnlineStudents()" class="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh">
                                     <i class="ph-bold ph-arrows-clockwise text-lg"></i>
                                 </button>
                             </div>
@@ -3001,8 +3023,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 },
 
                 // TEACHER: SHOW MODULE SCORES MODAL
-                showModuleScores(modId) {
+                 showModuleScores(modId) {
                     const m = app.state.data.modules.find(mod => mod.id === modId);
+                    const modType = m ? (m.modType || 'Quiz') : 'Quiz';
                     const allProg = app.state.data.progress || {};
 
                     // Flatten Data for this Module
@@ -3033,7 +3056,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-[scaleIn_0.3s_ease]">
                             <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                                 <div>
-                                    <h3 class="font-bold text-slate-800 text-lg">Class Results</h3>
+                                    <h3 class="font-bold text-slate-800 text-lg">${modType} Results</h3>
                                     <p class="text-xs text-slate-500">${m.title}</p>
                                 </div>
                                 <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
@@ -3076,7 +3099,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                                                 `<span class="inline-flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-[10px] font-black border border-amber-100">
                                                                     <i class="ph-fill ph-warning"></i> DATA
                                                                 </span>` : 
-                                                                `<span class="text-slate-300 text-[10px]">—</span>`
+                                                                `<span class="text-slate-300 text-[10px">—</span>`
                                                             )
                                                         }
                                                     </td>
@@ -3104,7 +3127,6 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                         <i class="ph ph-chart-bar"></i> Item Analysis
                                     </button>
                                     <button onclick="app.handlers.downloadResultsCSV('${modId}')" class="px-4 py-2 bg-brand-50 border border-brand-100 shadow-sm rounded-lg text-sm font-bold text-brand-600 hover:bg-brand-100 flex items-center gap-2"><i class="ph ph-download-simple"></i> Download CSV</button>
-                                    <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800">Close</button>
                                 </div>
                             </div>
                         </div>
@@ -3115,6 +3137,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 // TEACHER: SHOW ITEM ANALYSIS MODAL
                 async showItemAnalysisModal(modId) {
                     const m = app.state.data.modules.find(mod => mod.id === modId);
+                    const modType = m ? (m.modType || 'Quiz') : 'Quiz';
                     const modal = document.getElementById('modal-overlay');
                     
                     // Initial Loading State
@@ -3122,7 +3145,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease]">
                             <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                                 <div>
-                                    <h3 class="font-bold text-slate-800 text-lg">Item Analysis Report</h3>
+                                    <h3 class="font-bold text-slate-800 text-lg">${modType} Item Analysis</h3>
                                     <p class="text-xs text-slate-500">${m.title} &bull; Difficulty & Discrimination Index</p>
                                 </div>
                                 <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
@@ -3150,8 +3173,8 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                         <div class="w-12 h-12 bg-amber-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20">
                                             <i class="ph-fill ph-chart-bar"></i>
                                         </div>
-                                        <div>
-                                            <h3 class="font-display font-black text-slate-800 text-xl uppercase tracking-tight">Item Analysis Report</h3>
+                                         <div>
+                                            <h3 class="font-display font-black text-slate-800 text-xl uppercase tracking-tight">${modType} Item Analysis</h3>
                                             <p class="text-xs text-slate-500 font-medium">${m.title} &bull; ${res.totalStudents} Students Analyzed</p>
                                         </div>
                                     </div>
@@ -3494,6 +3517,30 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                                     <div class="h-px bg-slate-100"></div>
 
+                                    <!-- TERMINOLOGY TOGGLE -->
+                                    <div class="bg-brand-50/50 p-4 rounded-xl border border-brand-100/50">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="flex items-center gap-2">
+                                                <i class="ph-bold ph-tag text-brand-600"></i>
+                                                <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Terminology</h4>
+                                            </div>
+                                            <span class="text-[10px] font-bold text-brand-600 px-2 py-0.5 bg-white border border-brand-100 rounded shadow-sm">Assessment Type</span>
+                                        </div>
+                                        <div class="flex p-1 bg-white border border-slate-200 rounded-xl shadow-inner">
+                                            <label class="flex-1 cursor-pointer">
+                                                <input type="radio" name="modType" value="Quiz" class="peer hidden" ${m.modType !== 'Exam' ? 'checked' : ''}>
+                                                <div class="py-2 text-center rounded-lg text-xs font-bold transition-all peer-checked:bg-brand-600 peer-checked:text-white text-slate-500 hover:bg-slate-50">Quiz</div>
+                                            </label>
+                                            <label class="flex-1 cursor-pointer">
+                                                <input type="radio" name="modType" value="Exam" class="peer hidden" ${m.modType === 'Exam' ? 'checked' : ''}>
+                                                <div class="py-2 text-center rounded-lg text-xs font-bold transition-all peer-checked:bg-brand-600 peer-checked:text-white text-slate-500 hover:bg-slate-50">Exam</div>
+                                            </label>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 mt-2 italic text-center leading-relaxed">Changes user-facing labels for this module.</p>
+                                    </div>
+
+                                    <div class="h-px bg-slate-100"></div>
+
                                     <!-- RE-UPLOAD ASSETS -->
                                     <div class="space-y-4">
                                         <h4 class="text-xs font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
@@ -3501,14 +3548,14 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                         </h4>
                                         
                                         <div>
-                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Video/HTML)</label>
-                                            <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Word/PPT/Image/Video)</label>
+                                            <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                                         </div>
                                         
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Activity Sheet (PDF/HTML)</label>
-                                                <input type="file" name="appFile" accept="application/pdf,text/html,.html" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Activity Sheet (PDF/Word/PPT/Image)</label>
+                                                <input type="file" name="appFile" accept="application/pdf,text/html,.html,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                                             </div>
                                             <div>
                                                 <label class="block text-[10px] font-bold text-slate-500 mb-1">Quiz Data (CSV)</label>
@@ -5033,8 +5080,11 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 },
 
                 startQuiz(modId) {
+                    const mod = app.state.data.modules.find(m => m.id === modId);
+                    const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
+
                     if (app.state.userMode === 'teacher' && !app.state.viewAsStudent) {
-                        app.showToast("Teachers cannot take quizzes.", "error");
+                        app.showToast(`Teachers cannot take ${modType.toLowerCase()}s.`, "error");
                         return;
                     }
 
@@ -5043,7 +5093,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
-                        step: 'Taking Quiz'
+                        step: `Taking ${modType}`
                     };
                     
                     const info = app.state.studentInfo || {};
@@ -5051,7 +5101,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
                         <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl animate-[scaleIn_0.3s_ease]">
-                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display">Start Quiz</h3>
+                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display">Start ${modType}</h3>
                             <p class="text-slate-500 mb-6 text-sm">Please confirm your details before starting.</p>
                             
                             <form id="quizDetailsForm" class="space-y-4">
@@ -5078,7 +5128,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 <div class="flex gap-3 pt-4 border-t border-slate-100 mt-6">
                                     <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="flex-1 bg-slate-100 text-slate-700 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-colors">Cancel</button>
                                     <button type="submit" style="background-color: #d97706;" class="flex-1 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex justify-center items-center hover:opacity-90">
-                                        Start Quiz <i class="ph-bold ph-lightning ml-2"></i>
+                                        Start ${modType} <i class="ph-bold ph-lightning ml-2"></i>
                                     </button>
                                 </div>
                             </form>
@@ -5121,6 +5171,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 },
 
                 showIdentityVerification(modId, existingStream = null) {
+                    const mod = app.state.data.modules.find(m => m.id === modId);
+                    const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
+
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
                         <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl animate-[scaleIn_0.3s_ease] text-center border border-slate-100">
@@ -5157,7 +5210,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 </button>
                                 
                                 <button id="btn-proceed-identity" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-green-700 transition-all flex justify-center items-center gap-2 hidden">
-                                    <i class="ph-bold ph-arrow-right"></i> Start My Quiz
+                                    <i class="ph-bold ph-arrow-right"></i> Start My ${modType}
                                 </button>
                                 
                                 <div id="permission-error-msg" class="bg-red-50 p-4 rounded-xl border border-red-100 text-left hidden">
@@ -5496,11 +5549,12 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                 launchQuizInterface(modId, baselinePhoto = null, existingStream = null) {
                     const mod = app.state.data.modules.find(m => m.id === modId);
+                    const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
                     
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
-                        step: 'Quiz'
+                        step: modType
                     };
                     
                     const modal = document.getElementById('modal-overlay');
@@ -5556,7 +5610,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                     <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
                                         <i class="ph-bold ph-trophy"></i>
                                     </div>
-                                    <h3 class="text-xl font-bold text-slate-800">Quiz Complete!</h3>
+                                    <h3 class="text-xl font-bold text-slate-800">${modType} Complete!</h3>
                                     <p class="text-slate-500 mb-6">You scored <span class="text-green-600 font-bold text-lg">${finalScore}%</span></p>
                                     
                                     <button onclick="document.getElementById('modal-overlay').classList.add('hidden'); app.render(); fireConfetti();" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">
@@ -5662,7 +5716,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                             <div class="w-20 h-20 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
                                 <i class="ph-bold ph-warning-octagon"></i>
                             </div>
-                            <h3 class="text-2xl font-black text-slate-800 mb-2 uppercase tracking-wide">Quiz Rules</h3>
+                            <h3 class="text-2xl font-black text-slate-800 mb-2 uppercase tracking-wide">${modType} Rules</h3>
                             <p class="text-slate-500 mb-6 font-medium">Read carefully before starting!</p>
                             
                             <ul class="text-left space-y-4 mb-8 bg-slate-50 p-6 rounded-xl border border-slate-100">
@@ -5676,7 +5730,7 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                                 </li>
                                 <li class="flex items-start gap-3">
                                     <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
-                                    <span class="text-sm text-slate-700 font-medium"><strong>No Sharing:</strong> Taking the quiz is a solo activity. Do not share answers with your classmates.</span>
+                                    <span class="text-sm text-slate-700 font-medium"><strong>No Sharing:</strong> Taking the ${modType.toLowerCase()} is a solo activity. Do not share answers with your classmates.</span>
                                 </li>
                                 <li class="flex items-start gap-3">
                                     <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
@@ -5728,6 +5782,9 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                 },
 
                 showQuizExitConfirmation(modId) {
+                    const mod = app.state.data.modules.find(m => m.id === modId);
+                    const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
+
                     const modal = document.createElement('div');
                     modal.id = 'exit-confirmation-overlay';
                     modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-[fadeIn_0.2s_ease-out]';
@@ -5736,15 +5793,15 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                             <div class="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
                                 <i class="ph-bold ph-warning-octagon text-4xl"></i>
                             </div>
-                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display uppercase tracking-tight">Exit Quiz?</h3>
+                            <h3 class="text-2xl font-black text-slate-800 mb-2 font-display uppercase tracking-tight">Exit ${modType}?</h3>
                             <p class="text-slate-500 mb-8 text-sm leading-relaxed px-2 font-medium">Are you sure you want to stop? Your current progress will be lost and your instructor will be notified.</p>
                             
                             <div class="flex flex-col gap-3">
                                 <button id="btn-confirm-exit" class="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-700 transition-all transform hover:scale-[1.02] active:scale-[0.98]">
-                                    Yes, Exit Quiz
+                                    Yes, Exit ${modType}
                                 </button>
                                 <button id="btn-cancel-exit" class="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all">
-                                    Continue Quiz
+                                    Continue ${modType}
                                 </button>
                             </div>
                         </div>
