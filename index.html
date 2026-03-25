@@ -787,57 +787,42 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                         : null;
                     if (onProgress) onProgress(40, 'encode');
 
-                    // Use XHR instead of fetch so we get real upload progress
+                    // Use fetch for better CORS resilience (GAS redirects can be tricky for XHR)
                     const apiUrl = (STANDALONE_CONFIG.API_URL || '').trim();
+                    if (apiUrl.toLowerCase().includes('/dev')) {
+                         console.warn("[Upload] Warning: '/dev' URLs often fail CORS. Use '/exec' for production.");
+                    }
+
                     const body = JSON.stringify({ action: 'uploadModule', args: [payload] });
-                    console.log(`[Upload] Sending payload (${(body.length/1024/1024).toFixed(2)}MB) to: ${apiUrl.substring(0, 40)}...`);
+                    const payloadSizeMb = (body.length / (1024 * 1024)).toFixed(2);
+                    console.log(`[Upload] Sending payload (${payloadSizeMb}MB) to: ${apiUrl.substring(0, 40)}...`);
 
-                    await new Promise((resolve, reject) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', apiUrl);
-                        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+                    if (onProgress) onProgress(45, `Sending ${payloadSizeMb}MB...`);
 
-                        xhr.upload.onprogress = (ev) => {
-                            if (ev.lengthComputable && onProgress) {
-                                // Map XHR upload phase to 40–95%
-                                const xhrPct = 40 + (ev.loaded / ev.total) * 55;
-                                onProgress(xhrPct, `Sending ${Math.round(ev.loaded/1024/1024)}MB / ${Math.round(ev.total/1024/1024)}MB`);
-                            }
-                        };
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: body,
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                    });
 
-                        xhr.onload = () => {
-                            if (onProgress) onProgress(97, 'upload');
-                            let response;
-                            try {
-                                response = JSON.parse(xhr.responseText);
-                            } catch (e) {
-                                console.error("Upload Parse Error Raw:", xhr.responseText);
-                                return reject(new Error('Server returned invalid data format (Status: ' + xhr.status + ')'));
-                            }
-                            
-                            if (response.success) {
-                                resolve(response.data);
-                            } else {
-                                reject(new Error(response.error || 'Server reported an error during upload.'));
-                            }
-                        };
-                        xhr.onerror = () => {
-                            console.error("Upload XHR Error. Status:", xhr.status, "StatusText:", xhr.statusText);
-                            let msg = 'Network error during upload.';
-                            if (xhr.status === 0) {
-                                msg += '\n\nPossible Causes:\n1. Connection timeout (slow internet).\n2. Resulting payload exceeded 50MB (GAS limit).\n3. Server is temporarily unavailable.';
-                            } else {
-                                msg += ` (Status: ${xhr.status} ${xhr.statusText})`;
-                            }
-                            reject(new Error(msg));
-                        };
-                        xhr.send(body);
-                    }).then(data => {
-                        callback(data !== undefined ? data : { success: true });
-                    }).catch(e => callback({ success: false, error: String(e) }));
+                    if (!response.ok) {
+                        throw new Error(`Server returned status ${response.status}: ${response.statusText}`);
+                    }
+
+                    const res = await response.json();
+                    if (onProgress) onProgress(100, 'Done');
+                    
+                    if (res.success) {
+                        callback(res.data !== undefined ? res.data : { success: true });
+                    } else {
+                        throw new Error(res.error || 'Server reported an error during upload.');
+                    }
 
                 } catch (err) {
-                    callback({ success: false, error: err.toString() });
+                    console.error("[Upload] Critical Error:", err);
+                    let msg = err.message || String(err);
+                    if (msg.includes('fetch')) msg = "Network error or CORS block. Ensure GAS is deployed to 'Anyone'.";
+                    callback({ success: false, error: msg });
                 }
             },
 
@@ -892,7 +877,14 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                         ? await (new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsText(fd.get('quizFile')); }))
                         : null;
 
-                    BackEndService.call('updateModule', [payload]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                    BackEndService.call('updateModule', [payload])
+                        .then(callback)
+                        .catch(e => {
+                            console.error("[Update] Critical Error:", e);
+                            let msg = e.message || String(e);
+                            if (msg.includes('fetch')) msg = "Network error or CORS block. Ensure GAS is deployed to 'Anyone'.";
+                            callback({ success: false, error: msg });
+                        });
                 } catch (err) {
                     callback({ success: false, error: err.toString() });
                 }
