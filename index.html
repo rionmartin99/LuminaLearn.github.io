@@ -1,11 +1,11 @@
 <!--
-v3.4.0
+v3.4.1
 Update Log:
+v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error reporting for "Connecting to Cloud" hang.
 v3.4.0 - 2026-03-25 10:45 PM: [NEW] Phase 18: Integrated on-the-fly PDF conversion for .docx, .pptx, and images.
 v3.3.0 - 2026-03-25 10:45 PM: [NEW] Phase 17: CSV Item Analysis integration, UI refinements (button repositioning/removal).
 v3.2.0 - 2026-03-25 09:15 PM: [NEW] Phase 16: "Quiz" vs "Exam" terminology toggle and dynamic labelling across UI/CSV.
 v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent locking & NaN scores.
-v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index (CTT) tracking and UI.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -609,26 +609,45 @@ v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index
          * BACKEND SERVICE (Bridge between GAS and Standalone)
          */
         const BackEndService = {
+            async fetchWithTimeout(resource, options = {}) {
+                const { timeout = 15000 } = options;
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), timeout);
+                try {
+                    const response = await fetch(resource, { ...options, signal: controller.signal });
+                    clearTimeout(id);
+                    return response;
+                } catch (err) {
+                    clearTimeout(id);
+                    if (err.name === 'AbortError') throw new Error("Connection Timeout: The cloud is taking too long to respond. Please check your internet or retry.");
+                    throw err;
+                }
+            },
+
             async call(action, args = []) {
                 // 1. GAS Mode
                 if (typeof google !== 'undefined' && google.script && google.script.run) {
                     return new Promise((resolve, reject) => {
                         google.script.run
-                            .withSuccessHandler(resolve)
+                            .withSuccessHandler(res => {
+                                // Double parse for consistent behavior if backend returns string
+                                if (action === 'getData' && typeof res === 'string') {
+                                    try { resolve(JSON.parse(res)); } catch(e) { resolve(res); }
+                                } else { resolve(res); }
+                            })
                             .withFailureHandler(reject)
                             [action].apply(google.script.run, args);
                     });
                 }
 
                 // 2. Standalone Mode (Fetch)
-                const apiUrl = STANDALONE_CONFIG.API_URL;
+                let apiUrl = (STANDALONE_CONFIG.API_URL || '').trim();
                 if (!apiUrl && STANDALONE_CONFIG.isStandalone) {
                     this.promptForUrl();
                     throw new Error("Backend URL not configured.");
                 }
 
                 try {
-                    // Determine if it's a retrieval (GET) or mutation (POST)
                     const getActions = ['getData', 'getOnlineStudents', 'getClassCode', 'getStudentProfile', 'getVideoUrl', 'getMonitoringDetails', 'getPdfContent'];
                     const isGet = getActions.includes(action);
 
@@ -637,15 +656,19 @@ v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index
                         url.searchParams.append('api', action);
                         if (args && args.length > 0) url.searchParams.append('args', JSON.stringify(args));
                         
-                        const response = await fetch(url.toString());
+                        const response = await this.fetchWithTimeout(url.toString(), { method: 'GET' });
+                        if (!response.ok) throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+                        
                         const res = await response.json();
                         return res.success ? res.data : Promise.reject(res.error);
                     } else {
-                        const response = await fetch(apiUrl, {
+                        const response = await this.fetchWithTimeout(apiUrl, {
                             method: 'POST',
                             body: JSON.stringify({ action, args }),
                             headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                         });
+                        if (!response.ok) throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+                        
                         const res = await response.json();
                         return res.success ? res.data : Promise.reject(res.error);
                     }
@@ -700,10 +723,26 @@ v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index
                     callback(data);
                 } catch (err) {
                     console.error("Data Load Error:", err);
-                    if (STANDALONE_CONFIG.isStandalone && !STANDALONE_CONFIG.API_URL) return; // Prompt already shown
+                    const apiUrl = (STANDALONE_CONFIG.API_URL || '').trim();
+                    if (STANDALONE_CONFIG.isStandalone && !apiUrl) return; // Prompt already shown
+
                     const overlay = document.getElementById('loading-overlay');
                     if (overlay) {
-                        overlay.innerHTML = `<div class="text-red-500 text-center p-4"><div class="text-4xl mb-2">⚠️</div><h3 class="font-bold">Connection Failed</h3><p class="text-sm mt-2">${err.message || err}</p><button onclick="location.reload()" class="mt-4 px-4 py-2 bg-slate-800 text-white rounded-lg">Retry</button></div>`;
+                        const errorMsg = err.message || err.toString();
+                        const isTimeout = errorMsg.toLowerCase().includes('timeout');
+                        overlay.innerHTML = `
+                            <div class="text-red-500 text-center p-8 bg-white rounded-3xl shadow-xl max-w-sm mx-4 fade-in border border-red-50">
+                                <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <i class="ph-bold ph-cloud-slash text-red-600 text-3xl"></i>
+                                </div>
+                                <h3 class="text-xl font-bold text-slate-900 mb-2">${isTimeout ? 'Connection Timeout' : 'Connection Failed'}</h3>
+                                <p class="text-slate-500 text-sm mb-6">${errorMsg}</p>
+                                <button onclick="location.reload()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition-all">
+                                    Retry Connection
+                                </button>
+                                ${STANDALONE_CONFIG.isStandalone ? `<button onclick="localStorage.removeItem('lumina_api_url'); location.reload();" class="mt-4 text-xs text-slate-400 hover:text-slate-600 underline">Reset Server URL</button>` : ''}
+                            </div>
+                        `;
                     }
                 }
             },
