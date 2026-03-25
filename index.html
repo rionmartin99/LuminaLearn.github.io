@@ -1,6 +1,7 @@
 <!--
-v3.1.0
+v3.1.1
 Update Log:
+v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent locking & NaN scores.
 v3.1.0 - 2026-03-25 04:30 PM: [NEW] Implemented Item Analysis & Difficulty Index (CTT) tracking and UI.
 v3.0.7 - 2026-03-25 03:40 PM: [UI] Added upload limit notice (35MB) to inform teachers.
 v3.0.6 - 2026-03-25 03:30 PM: [FIX] Switched to fetch for better CORS resilience on GitHub Pages.
@@ -4533,7 +4534,14 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
                         const docType = isContent ? mod.contentType : mod.appType;
 
                         if (!fileId) {
-                            content.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400"><i class="ph ph-file text-4xl mb-2"></i><p>No document loaded</p></div>`;
+                            content.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 p-10 text-center"><i class="ph ph-file-dashed text-5xl mb-4 opacity-50"></i><p class="font-bold">No Content Available</p><p class="text-xs mt-2">The teacher did not provide a document for this step.</p></div>`;
+                            
+                            // AUTO-ENABLE completion if content is missing, so students aren't locked out
+                            if (isContent) {
+                                btn.disabled = false;
+                                btnText.textContent = "Mark as Read (No Content)";
+                                checkIcon.className = "w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-200";
+                            }
                             return;
                         }
 
@@ -5530,7 +5538,8 @@ v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from ba
 
                     const renderQ = () => {
                         if (currentQ >= quizData.length) {
-                            const finalScore = Math.round((score / quizData.length) * 100);
+                            // Handle empty quiz case to prevent NaN
+                            const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
 
                             // SUBMIT WITH STUDENT INFO, RAW POINTS, AND ITEM ANALYSIS
                             const pointsStr = `${score}/${quizData.length}`;
