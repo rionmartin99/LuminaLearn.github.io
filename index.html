@@ -1,11 +1,11 @@
 <!--
-v2.9.0
+v2.9.2
 Update Log:
+v2.9.2 - 2026-03-25 08:42 AM: [FIX] Moved About Us to the end of navigation. [FIX] Reduced About Us nav width. [FIX] Reordered About page sections.
+v2.9.1 - 2026-03-25 08:37 AM: [FIX] Restricted About Us page to Teacher Mode only (hidden for students).
 v2.9.0 - 2026-03-25 08:30 AM: [FEATURE] Added About Us page with developer info, GCash support link, and Feedback system.
 v2.8.6 - 2026-03-23 04:00 PM: [FIX] Corrected teacher registration redirection to ensure proper Teacher Mode activation.
 v2.8.5 - 2026-03-23 03:35 PM: [FIX] Added frontend interceptor to allow Teacher Registration using local fallback codes on outdated backends.
-v2.8.4 - 2026-03-23 03:20 PM: [FIX] Added localStorage fallback for teacher code regeneration when backend is outdated.
-v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI overlays. [FIX] Corrected apiBridge function lookup.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -233,7 +233,7 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
     </main>
 
     <!-- BOTTOM NAVIGATION -->
-    <nav class="h-16 bg-white border-t border-slate-100 flex items-center justify-around shrink-0 pb-safe z-30">
+    <nav class="h-16 bg-white border-t border-slate-100 flex items-center justify-start shrink-0 pb-safe z-30">
         <button id="nav-dashboard" onclick="app.navigate('dashboard')"
             class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-brand-600 hidden">
             <i class="ph ph-squares-four text-2xl group-hover:scale-110 transition-transform"></i>
@@ -245,13 +245,6 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
             class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-slate-400 hover:text-brand-600 transition-colors hidden">
             <i class="ph ph-user-circle text-2xl group-hover:scale-110 transition-transform"></i>
             <span class="text-[10px] font-medium">Profile</span>
-        </button>
-
-        <!-- ABOUT PAGE -->
-        <button id="nav-about" onclick="app.navigate('about')"
-            class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-slate-400 hover:text-brand-600 transition-colors">
-            <i class="ph ph-info text-2xl group-hover:scale-110 transition-transform"></i>
-            <span class="text-[10px] font-medium">About</span>
         </button>
 
         <!-- TEACHER ONLY: CLASS MANAGEMENT -->
@@ -266,6 +259,13 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
             class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-slate-400 hover:text-brand-600 transition-colors hidden">
             <i class="ph ph-upload-simple text-2xl group-hover:scale-110 transition-transform"></i>
             <span class="text-[10px] font-medium">Upload</span>
+        </button>
+
+        <!-- ABOUT PAGE: LAST & SUBTLE -->
+        <button id="nav-about" onclick="app.navigate('about')"
+            class="nav-btn group flex flex-col items-center gap-1 w-14 flex-none h-full justify-center text-slate-400 hover:text-brand-600 transition-colors hidden border-l border-slate-50">
+            <i class="ph ph-info text-xl group-hover:scale-110 transition-transform"></i>
+            <span class="text-[8px] font-bold uppercase tracking-tighter opacity-70">About</span>
         </button>
     </nav>
 
@@ -1284,7 +1284,7 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
 
                 // Hide Teacher UI if in Student Mode (forced or toggled)
                 const isTeacher = this.state.userMode === 'teacher';
-                const teacherNavs = ['nav-upload', 'nav-class-management'];
+                const teacherNavs = ['nav-upload', 'nav-class-management', 'nav-about'];
                 teacherNavs.forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.toggle('hidden', !isTeacher);
@@ -1356,6 +1356,11 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
             },
 
             navigate(view, param = null) {
+                // Access Control: Students cannot access About Us page
+                if (this.state.userMode === 'student' && view === 'about') {
+                    app.showToast("Faculty Only Feature", "error");
+                    return;
+                }
                 this.state.view = view;
                 if (param) this.state.activeModuleId = param;
 
@@ -3786,30 +3791,6 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                             </p>
                         </div>
 
-                        <!-- SUPPORT SECTION -->
-                        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-amber-500/20 relative overflow-hidden group">
-                           <div class="relative z-10 space-y-4">
-                               <div class="flex items-center gap-3">
-                                   <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                                       <i class="ph-bold ph-heart text-2xl"></i>
-                                   </div>
-                                   <h3 class="text-xl font-bold">Support the developer</h3>
-                               </div>
-                               <p class="text-white/80 text-sm">Your support helps us maintain and improve Lumina Learning for everyone.</p>
-                               <div class="bg-white/20 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex items-center justify-between">
-                                   <div>
-                                       <div class="text-[10px] font-black uppercase tracking-widest text-white/60">GCash Account</div>
-                                       <div class="text-lg font-mono font-bold tracking-wider">0915-858-9344</div>
-                                   </div>
-                                   <a href="gcash://express_send?amount=&number=09158589344&notes=Support+RION" 
-                                      class="bg-white text-amber-600 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-neutral-50 transition-all active:scale-95">
-                                       Send Tip
-                                   </a>
-                               </div>
-                           </div>
-                           <i class="ph-bold ph-currency-circle-dollar absolute -bottom-8 -right-8 text-9xl opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700"></i>
-                        </div>
-
                         <!-- FEEDBACK FORM -->
                         <div class="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-6">
                             <div class="flex items-center gap-3">
@@ -3851,6 +3832,24 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                                     Submit Feedback
                                 </button>
                             </form>
+                        </div>
+
+                        <!-- SUPPORT SECTION - TONED DOWN -->
+                        <div class="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-white/20 flex flex-col items-center text-center space-y-4 shadow-sm max-w-sm mx-auto">
+                           <div class="flex items-center gap-2 text-amber-600 font-bold text-sm">
+                               <i class="ph-fill ph-heart"></i>
+                               <span>Support the developer</span>
+                           </div>
+                           <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50 w-full flex items-center justify-between">
+                               <div class="text-left">
+                                   <div class="text-[9px] font-bold uppercase tracking-widest text-slate-400">GCash</div>
+                                   <div class="text-sm font-mono font-bold text-slate-700">0915-858-9344</div>
+                               </div>
+                               <a href="gcash://express_send?amount=&number=09158589344&notes=Support+RION" 
+                                  class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider shadow hover:bg-indigo-700 transition-all active:scale-95">
+                                   Send Tip
+                               </a>
+                           </div>
                         </div>
                     `;
 
