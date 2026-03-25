@@ -1,11 +1,11 @@
 <!--
-v3.0.4
+v3.0.5
 Update Log:
+v3.0.5 - 2026-03-25 03:10 PM: [FIX] Added 35MB upload size validation and improved network error reporting for standalone mode.
 v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from backend.
 v3.0.3 - 2026-03-25 01:25 PM: [FIX] Cleaned up version log format and debris.
 v3.0.2 - 2026-03-25 01:21 PM: [FIX] RION logo circular styling (object-cover) & [DEBUG] Upload diagnostics.
 v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
-v3.0.1 - 2026-03-25 09:35 AM: [FIX] Restored RION logo via Base64.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -73,7 +73,8 @@ v3.0.1 - 2026-03-25 09:35 AM: [FIX] Restored RION logo via Base64.
         // STANDALONE CONFIGURATION
         const STANDALONE_CONFIG = {
             API_URL: localStorage.getItem('lumina_api_url') || "https://script.google.com/macros/s/AKfycbxz2fsVbWQsccNWzDYLD4oSNIMgBshEljveqYekzVZLaBnC_5p-bSPk2jIVByIo28O5/exec",
-            isStandalone: !window.location.hostname.includes('google.com')
+            isStandalone: !window.location.hostname.includes('google.com'),
+            MAX_UPLOAD_SIZE: 35 * 1024 * 1024 // 35MB safely accounts for Base64 overhead (33%) under 50MB GAS limit
         };
 
         // INJECTED FROM GAS
@@ -738,10 +739,24 @@ v3.0.1 - 2026-03-25 09:35 AM: [FIX] Restored RION logo via Base64.
                     }).catch(e => callback({ success: false, error: e.toString() }));
                     return;
                 }
+
                 // Standalone/fetch mode: serialize form data + files as base64, use XHR for progress
                 try {
                     if (onProgress) onProgress(5, 'encode');
                     const fd = new FormData(form);
+
+                    // --- SIZE VALIDATION ---
+                    const contentFile = fd.get('contentFile');
+                    const appFile = fd.get('appFile');
+                    let totalSize = 0;
+                    if (contentFile && contentFile.size) totalSize += contentFile.size;
+                    if (appFile && appFile.size) totalSize += appFile.size;
+
+                    if (totalSize > STANDALONE_CONFIG.MAX_UPLOAD_SIZE) {
+                        const sizeMb = (totalSize / (1024 * 1024)).toFixed(1);
+                        throw new Error(`Total file size (${sizeMb}MB) exceeds the 35MB limit for standalone mode. Please use smaller files or compress your videos/PDFs.`);
+                    }
+
                     const payload = {
                         userId: app.state.userId || '',
                         title: fd.get('title') || '',
@@ -805,8 +820,11 @@ v3.0.1 - 2026-03-25 09:35 AM: [FIX] Restored RION logo via Base64.
                         xhr.onerror = () => {
                             console.error("Upload XHR Error. Status:", xhr.status, "StatusText:", xhr.statusText);
                             let msg = 'Network error during upload.';
-                            if (xhr.status === 0) msg += ' (Possible connection timeout or 50MB payload limit exceeded)';
-                            else msg += ` (Status: ${xhr.status} ${xhr.statusText})`;
+                            if (xhr.status === 0) {
+                                msg += '\n\nPossible Causes:\n1. Connection timeout (slow internet).\n2. Resulting payload exceeded 50MB (GAS limit).\n3. Server is temporarily unavailable.';
+                            } else {
+                                msg += ` (Status: ${xhr.status} ${xhr.statusText})`;
+                            }
                             reject(new Error(msg));
                         };
                         xhr.send(body);
@@ -831,6 +849,19 @@ v3.0.1 - 2026-03-25 09:35 AM: [FIX] Restored RION logo via Base64.
                 // Standalone/fetch mode: serialize to plain object + base64 files
                 try {
                     const fd = new FormData(form);
+
+                    // --- SIZE VALIDATION ---
+                    const contentFile = fd.get('contentFile');
+                    const appFile = fd.get('appFile');
+                    let totalSize = 0;
+                    if (contentFile && contentFile.size) totalSize += contentFile.size;
+                    if (appFile && appFile.size) totalSize += appFile.size;
+
+                    if (totalSize > STANDALONE_CONFIG.MAX_UPLOAD_SIZE) {
+                        const sizeMb = (totalSize / (1024 * 1024)).toFixed(1);
+                        throw new Error(`Total file size (${sizeMb}MB) exceeds the 35MB limit for standalone mode. Please use smaller files or compress your videos/PDFs.`);
+                    }
+
                     const payload = {
                         userId:     app.state.userId || '',
                         modId:      fd.get('modId') || '',
