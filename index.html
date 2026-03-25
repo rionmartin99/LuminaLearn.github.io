@@ -1,11 +1,11 @@
 <!--
-v3.4.1
+v3.5.0
 Update Log:
+v3.5.0 - 2026-03-26 05:55 AM: [NEW] Enhanced CSV Results export with Summary Stats and CTT Item Analysis (v3.5 backend).
+v3.4.4 - 2026-03-26 05:48 AM: [FIX] Resolved "mod" redeclaration SyntaxError in startQuiz() that crashed initialization.
+v3.4.3 - 2026-03-26 05:45 AM: [FIX] Added emergency recovery UI, global error logging, and syntax-safe template tags.
+v3.4.2 - 2026-03-26 05:40 AM: [FIX] Extended cloud timeout to GAS mode (google.script.run) for better hang recovery.
 v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error reporting for "Connecting to Cloud" hang.
-v3.4.0 - 2026-03-25 10:45 PM: [NEW] Phase 18: Integrated on-the-fly PDF conversion for .docx, .pptx, and images.
-v3.3.0 - 2026-03-25 10:45 PM: [NEW] Phase 17: CSV Item Analysis integration, UI refinements (button repositioning/removal).
-v3.2.0 - 2026-03-25 09:15 PM: [NEW] Phase 16: "Quiz" vs "Exam" terminology toggle and dynamic labelling across UI/CSV.
-v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent locking & NaN scores.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -77,8 +77,28 @@ v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent
             MAX_UPLOAD_SIZE: 35 * 1024 * 1024 // 35MB safely accounts for Base64 overhead (33%) under 50MB GAS limit
         };
 
-        // INJECTED FROM GAS
-        const URL_MODE = "<?= mode ?>";
+        // INJECTED FROM GAS (Wrapped to prevent standalone syntax errors)
+        const URL_MODE = (function() { try { return "<?= mode ?>"; } catch(e) { return "standalone"; } })();
+
+        // GLOBAL ERROR DIAGNOSTICS
+        window.onerror = function(msg, url, line, col, error) {
+            console.error("Critical Runtime Error:", msg, line, col);
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.innerHTML = `
+                    <div class="text-red-500 text-center p-8 bg-white rounded-3xl shadow-xl max-w-sm mx-4 fade-in border border-red-50">
+                        <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <i class="ph-bold ph-warning-circle text-red-600 text-3xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-2">Script Error</h3>
+                        <p class="text-slate-500 text-xs mb-6 overflow-hidden">${msg}<br>at line ${line}:${col}</p>
+                        <button onclick="location.reload()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition-all">Retry System</button>
+                        <button onclick="localStorage.clear(); location.reload();" class="mt-4 text-xs text-slate-400 hover:text-slate-600 underline">Clear System Cache</button>
+                    </div>
+                `;
+            }
+            return false;
+        };
     </script>
 
     <style>
@@ -225,8 +245,35 @@ v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent
     <!-- LOADING OVERLAY -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
         <div class="spinner mb-4"></div>
-        <p class="text-slate-500 font-medium animate-pulse">Connecting to Cloud...</p>
+        <p id="loading-text" class="text-slate-500 font-medium animate-pulse text-center px-4">Connecting to Cloud...</p>
+        
+        <!-- Emergency Recovery UI (Hidden initially, shown after 20s) -->
+        <div id="emergency-retry" class="hidden text-center mt-8 fade-in px-6">
+            <button onclick="location.reload()" class="bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:bg-slate-800 active:scale-95 transition-all">
+                Force Reload System
+            </button>
+            <p class="text-xs text-slate-400 mt-6 leading-relaxed italic">
+                System seems stuck. This can happen due to poor internet or server delay.<br>
+                Try <a href="#" onclick="localStorage.clear(); location.reload()" class="text-brand-600 underline">Resetting Application Data</a> if problem persists.
+            </p>
+        </div>
     </div>
+
+    <script>
+        // Emergency Fail-safe: If JavaScript initialization fails or hangs for 20 seconds, show the manual retry UI.
+        const emergencyTimer = setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+                const btn = document.getElementById('emergency-retry');
+                if (btn) btn.classList.remove('hidden');
+                const text = document.getElementById('loading-text');
+                if (text) {
+                    text.innerText = "Connection is taking much longer than usual...";
+                    text.classList.remove('animate-pulse');
+                }
+            }
+        }, 20000);
+    </script>
 
     <!-- MAIN CONTENT AREA -->
     <main id="app-container" class="flex-1 overflow-y-auto hide-scrollbar relative bg-slate-50">
@@ -628,14 +675,22 @@ v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent
                 // 1. GAS Mode
                 if (typeof google !== 'undefined' && google.script && google.script.run) {
                     return new Promise((resolve, reject) => {
+                        const timeoutId = setTimeout(() => {
+                            reject(new Error("Cloud Timeout: Google Apps Script is not responding. Please refresh."));
+                        }, 15000);
+
                         google.script.run
                             .withSuccessHandler(res => {
+                                clearTimeout(timeoutId);
                                 // Double parse for consistent behavior if backend returns string
                                 if (action === 'getData' && typeof res === 'string') {
                                     try { resolve(JSON.parse(res)); } catch(e) { resolve(res); }
                                 } else { resolve(res); }
                             })
-                            .withFailureHandler(reject)
+                            .withFailureHandler(err => {
+                                clearTimeout(timeoutId);
+                                reject(err);
+                            })
                             [action].apply(google.script.run, args);
                     });
                 }
@@ -5128,7 +5183,6 @@ v3.1.1 - 2026-03-25 07:20 PM: [FIX] Handled empty content/quiz states to prevent
                     }
 
                     // Track quiz activity for teacher monitoring
-                    const mod = app.state.data.modules.find(m => m.id === modId);
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
