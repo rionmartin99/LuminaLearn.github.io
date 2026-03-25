@@ -742,20 +742,23 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
 
                 // Standalone/fetch mode: serialize form data + files as base64, use XHR for progress
                 try {
-                    if (onProgress) onProgress(5, 'encode');
                     const fd = new FormData(form);
 
-                    // --- SIZE VALIDATION ---
+                    // --- SIZE VALIDATION & DIAGNOSTICS ---
                     const contentFile = fd.get('contentFile');
                     const appFile = fd.get('appFile');
-                    let totalSize = 0;
-                    if (contentFile && contentFile.size) totalSize += contentFile.size;
-                    if (appFile && appFile.size) totalSize += appFile.size;
+                    let totalSizeBytes = 0;
+                    if (contentFile && contentFile.size) totalSizeBytes += contentFile.size;
+                    if (appFile && appFile.size) totalSizeBytes += appFile.size;
 
-                    if (totalSize > STANDALONE_CONFIG.MAX_UPLOAD_SIZE) {
-                        const sizeMb = (totalSize / (1024 * 1024)).toFixed(1);
-                        throw new Error(`Total file size (${sizeMb}MB) exceeds the 35MB limit for standalone mode. Please use smaller files or compress your videos/PDFs.`);
+                    const sizeMb = (totalSizeBytes / (1024 * 1024)).toFixed(1);
+                    console.log(`[Upload] Plan: ${sizeMb}MB total. Content: ${contentFile?.name} (${(contentFile?.size/1024/1024).toFixed(1)}MB), App: ${appFile?.name} (${(appFile?.size/1024/1024).toFixed(1)}MB)`);
+
+                    if (totalSizeBytes > STANDALONE_CONFIG.MAX_UPLOAD_SIZE) {
+                        throw new Error(`Total file size (${sizeMb}MB) exceeds the 35MB safety limit for standalone mode. Please use smaller files.`);
                     }
+
+                    if (onProgress) onProgress(5, `Encoding ${sizeMb}MB...`);
 
                     const payload = {
                         userId: app.state.userId || '',
@@ -785,8 +788,9 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                     if (onProgress) onProgress(40, 'encode');
 
                     // Use XHR instead of fetch so we get real upload progress
-                    const apiUrl = STANDALONE_CONFIG.API_URL;
+                    const apiUrl = (STANDALONE_CONFIG.API_URL || '').trim();
                     const body = JSON.stringify({ action: 'uploadModule', args: [payload] });
+                    console.log(`[Upload] Sending payload (${(body.length/1024/1024).toFixed(2)}MB) to: ${apiUrl.substring(0, 40)}...`);
 
                     await new Promise((resolve, reject) => {
                         const xhr = new XMLHttpRequest();
@@ -797,7 +801,7 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                             if (ev.lengthComputable && onProgress) {
                                 // Map XHR upload phase to 40–95%
                                 const xhrPct = 40 + (ev.loaded / ev.total) * 55;
-                                onProgress(xhrPct, 'upload');
+                                onProgress(xhrPct, `Sending ${Math.round(ev.loaded/1024/1024)}MB / ${Math.round(ev.total/1024/1024)}MB`);
                             }
                         };
 
@@ -2653,7 +2657,7 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                                 // Progress callback
                                 progressBar.style.width = pct + '%';
                                 progressPct.textContent = Math.round(pct) + '%';
-                                progressLbl.textContent = phase === 'encode' ? 'Encoding files...' : 'Sending to server...';
+                                progressLbl.textContent = phase; // Now displays detailed status from DataService
                             });
                         };
                     }, 0);
