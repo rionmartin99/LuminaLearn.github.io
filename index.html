@@ -1,11 +1,11 @@
 <!--
-v3.5.0
+v3.5.1
 Update Log:
+v3.5.1 - 2026-03-26 06:10 AM: [FIX] Restored HTML interactive module support. Updated labels to include HTML and renamed Terminology to Assessment Type.
 v3.5.0 - 2026-03-26 05:55 AM: [NEW] Enhanced CSV Results export with Summary Stats and CTT Item Analysis (v3.5 backend).
 v3.4.4 - 2026-03-26 05:48 AM: [FIX] Resolved "mod" redeclaration SyntaxError in startQuiz() that crashed initialization.
 v3.4.3 - 2026-03-26 05:45 AM: [FIX] Added emergency recovery UI, global error logging, and syntax-safe template tags.
 v3.4.2 - 2026-03-26 05:40 AM: [FIX] Extended cloud timeout to GAS mode (google.script.run) for better hang recovery.
-v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error reporting for "Connecting to Cloud" hang.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -2656,7 +2656,7 @@ v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error repor
                                 <div class="flex items-center justify-between mb-2">
                                     <div class="flex items-center gap-2">
                                         <i class="ph-bold ph-info text-slate-600"></i>
-                                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-widest">Terminology</h4>
+                                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-widest">Assessment Type</h4>
                                     </div>
                                     <span class="text-[10px] font-bold text-brand-600 px-2 py-0.5 bg-brand-50 rounded">Assessment Type</span>
                                 </div>
@@ -2683,12 +2683,12 @@ v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error repor
                             <div class="border-t border-slate-100 pt-2 mt-2"></div>
 
                              <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / Word / PPT / Image / Video)</label>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Learning Content (PDF / HTML / Word / PPT / Image / Video)</label>
                                 <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Activity Sheet (PDF / Word / PPT / Image)</label>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Activity Sheet (PDF / HTML / Word / PPT / Image)</label>
                                 <input type="file" name="appFile" accept="application/pdf,text/html,.html,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
                             </div>
 
@@ -3616,7 +3616,7 @@ v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error repor
                                         <div class="flex items-center justify-between mb-3">
                                             <div class="flex items-center gap-2">
                                                 <i class="ph-bold ph-tag text-brand-600"></i>
-                                                <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Terminology</h4>
+                                                <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Assessment Type</h4>
                                             </div>
                                             <span class="text-[10px] font-bold text-brand-600 px-2 py-0.5 bg-white border border-brand-100 rounded shadow-sm">Assessment Type</span>
                                         </div>
@@ -3642,13 +3642,13 @@ v3.4.1 - 2026-03-26 05:25 AM: [FIX] Added fetch timeout and enhanced error repor
                                         </h4>
                                         
                                         <div>
-                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/Word/PPT/Image/Video)</label>
+                                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Content (PDF/HTML/Word/PPT/Image/Video)</label>
                                             <input type="file" name="contentFile" accept="application/pdf,text/html,.html,video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                                         </div>
                                         
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Activity Sheet (PDF/Word/PPT/Image)</label>
+                                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Activity Sheet (PDF/HTML/Word/PPT/Image)</label>
                                                 <input type="file" name="appFile" accept="application/pdf,text/html,.html,.docx,.pptx,image/*" class="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                                             </div>
                                             <div>
