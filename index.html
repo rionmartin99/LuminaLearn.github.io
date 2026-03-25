@@ -1,11 +1,10 @@
 <!--
-v3.0.5
+v3.0.7
 Update Log:
-v3.0.5 - 2026-03-25 03:10 PM: [FIX] Added 35MB upload size validation and improved network error reporting for standalone mode.
+v3.0.7 - 2026-03-25 03:40 PM: [UI] Added upload limit notice (35MB) to inform teachers.
+v3.0.6 - 2026-03-25 03:30 PM: [FIX] Switched to fetch for better CORS resilience on GitHub Pages.
+v3.0.5 - 2026-03-25 03:10 PM: [FIX] Added 35MB upload size validation and improved network error reporting.
 v3.0.4 - 2026-03-25 01:50 PM: [OPTIMIZATION] Dynamic RION logo injection from backend.
-v3.0.3 - 2026-03-25 01:25 PM: [FIX] Cleaned up version log format and debris.
-v3.0.2 - 2026-03-25 01:21 PM: [FIX] RION logo circular styling (object-cover) & [DEBUG] Upload diagnostics.
-v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -2590,7 +2589,16 @@ v3.0.1 - 2026-03-25 01:00 PM: [FIX] Made RION logo frame perfectly circular.
                                 </div>
                             </div>
 
-                            <button type="submit" id="submitBtn" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all mt-4">
+                            <div class="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-100 flex items-start">
+                                <i class="ph-bold ph-info text-amber-600 mt-0.5 mr-3 text-lg"></i>
+                                <div class="text-xs text-amber-900 leading-relaxed">
+                                    <strong class="block mb-1 text-amber-900">Upload Limitations</strong>
+                                    The standalone portal has a <strong>35MB total limit</strong> for combined files. 
+                                    If your video exceeds this, consider uploading to Drive/YouTube first or compressing the file.
+                                </div>
+                            </div>
+                            
+                            <button type="submit" id="submitBtn" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all mt-6">
                                 <i class="ph-bold ph-cloud-arrow-up mr-2"></i> Upload to System
                             </button>
                         </form>
