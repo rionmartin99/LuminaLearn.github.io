@@ -1,6 +1,7 @@
 <!--
-v2.8.6
+v2.9.0
 Update Log:
+v2.9.0 - 2026-03-25 08:30 AM: [FEATURE] Added About Us page with developer info, GCash support link, and Feedback system.
 v2.8.6 - 2026-03-23 04:00 PM: [FIX] Corrected teacher registration redirection to ensure proper Teacher Mode activation.
 v2.8.5 - 2026-03-23 03:35 PM: [FIX] Added frontend interceptor to allow Teacher Registration using local fallback codes on outdated backends.
 v2.8.4 - 2026-03-23 03:20 PM: [FIX] Added localStorage fallback for teacher code regeneration when backend is outdated.
@@ -244,6 +245,13 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
             class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-slate-400 hover:text-brand-600 transition-colors hidden">
             <i class="ph ph-user-circle text-2xl group-hover:scale-110 transition-transform"></i>
             <span class="text-[10px] font-medium">Profile</span>
+        </button>
+
+        <!-- ABOUT PAGE -->
+        <button id="nav-about" onclick="app.navigate('about')"
+            class="nav-btn group flex flex-col items-center gap-1 w-full h-full justify-center text-slate-400 hover:text-brand-600 transition-colors">
+            <i class="ph ph-info text-2xl group-hover:scale-110 transition-transform"></i>
+            <span class="text-[10px] font-medium">About</span>
         </button>
 
         <!-- TEACHER ONLY: CLASS MANAGEMENT -->
@@ -998,6 +1006,15 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                     callback({ success: false, error: err });
                 }
             },
+
+            async saveFeedback(userId, name, type, message, callback) {
+                try {
+                    const res = await BackEndService.call('saveFeedback', [userId, name, type, message]);
+                    callback(res);
+                } catch (err) {
+                    callback({ success: false, error: err });
+                }
+            },
             
             async updateGender(userId, newGender, callback) {
                 try {
@@ -1260,9 +1277,9 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
             render() {
                 // Nav States
                 document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.replace('text-brand-600', 'text-slate-400'));
-                const activeNav = this.state.view === 'upload' ? 1 : 0;
-                if (document.querySelectorAll('.nav-btn')[activeNav]) {
-                    document.querySelectorAll('.nav-btn')[activeNav].classList.replace('text-slate-400', 'text-brand-600');
+                const activeBtn = document.getElementById(`nav-${this.state.view}`);
+                if (activeBtn) {
+                    activeBtn.classList.replace('text-slate-400', 'text-brand-600');
                 }
 
                 // Hide Teacher UI if in Student Mode (forced or toggled)
@@ -1334,6 +1351,7 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                     case 'upload': container.appendChild(this.components.uploadForm()); break;
                     case 'class-management': container.appendChild(this.components.classManagement()); break;
                     case 'profile': container.appendChild(this.components.studentProfile()); break;
+                    case 'about': container.appendChild(this.components.aboutUs()); break;
                 }
             },
 
@@ -1353,6 +1371,8 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                     this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Browsing' };
                 } else if (view === 'profile') {
                     this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Viewing Profile' };
+                } else if (view === 'about') {
+                    this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Viewing About Us' };
                 }
 
                 this.render();
@@ -3741,6 +3761,131 @@ v2.8.3 - 2026-03-23 03:05 PM: [FIX] Replaced all native alerts/confirms with UI 
                             </div>
                         `;
                     });
+                },
+
+                aboutUs() {
+                    const wrap = document.createElement('div');
+                    wrap.className = "p-6 fade-in max-w-2xl mx-auto w-full pb-24 space-y-8";
+
+                    wrap.innerHTML = `
+                        <!-- DEVELOPER INFO SECTION -->
+                        <div class="bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-white/20 p-8 shadow-xl text-center space-y-6">
+                            <div class="w-24 h-24 bg-brand-50 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner border border-brand-100">
+                                <i class="ph-bold ph-rocket-launch text-brand-600 text-5xl"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-3xl font-black text-slate-800 tracking-tight">RION</h1>
+                                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Robotics and Innovations Oriented Nexus</p>
+                            </div>
+                            <div class="flex items-center justify-center gap-2 text-slate-600 font-medium">
+                                <i class="ph ph-phone text-lg"></i>
+                                <span>0947-764-6435</span>
+                            </div>
+                            <p class="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto">
+                                Empowering the next generation through innovative robotics and educational solutions.
+                            </p>
+                        </div>
+
+                        <!-- SUPPORT SECTION -->
+                        <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-amber-500/20 relative overflow-hidden group">
+                           <div class="relative z-10 space-y-4">
+                               <div class="flex items-center gap-3">
+                                   <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                                       <i class="ph-bold ph-heart text-2xl"></i>
+                                   </div>
+                                   <h3 class="text-xl font-bold">Support the developer</h3>
+                               </div>
+                               <p class="text-white/80 text-sm">Your support helps us maintain and improve Lumina Learning for everyone.</p>
+                               <div class="bg-white/20 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex items-center justify-between">
+                                   <div>
+                                       <div class="text-[10px] font-black uppercase tracking-widest text-white/60">GCash Account</div>
+                                       <div class="text-lg font-mono font-bold tracking-wider">0915-858-9344</div>
+                                   </div>
+                                   <a href="gcash://express_send?amount=&number=09158589344&notes=Support+RION" 
+                                      class="bg-white text-amber-600 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-neutral-50 transition-all active:scale-95">
+                                       Send Tip
+                                   </a>
+                               </div>
+                           </div>
+                           <i class="ph-bold ph-currency-circle-dollar absolute -bottom-8 -right-8 text-9xl opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700"></i>
+                        </div>
+
+                        <!-- FEEDBACK FORM -->
+                        <div class="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                                    <i class="ph-bold ph-chat-centered-text text-2xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-slate-800">Feedback Hub</h3>
+                                    <p class="text-xs text-slate-500">Comments, suggestions, or bugs?</p>
+                                </div>
+                            </div>
+
+                            <form id="feedbackForm" class="space-y-4">
+                                <div>
+                                    <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Category</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <label class="relative">
+                                            <input type="radio" name="type" value="Suggestion" checked class="peer sr-only">
+                                            <div class="p-3 text-center border border-slate-200 rounded-xl text-xs font-bold text-slate-500 peer-checked:bg-indigo-50 peer-checked:border-indigo-200 peer-checked:text-indigo-600 cursor-pointer transition-all">Suggestion</div>
+                                        </label>
+                                        <label class="relative">
+                                            <input type="radio" name="type" value="Comment" class="peer sr-only">
+                                            <div class="p-3 text-center border border-slate-200 rounded-xl text-xs font-bold text-slate-500 peer-checked:bg-indigo-50 peer-checked:border-indigo-200 peer-checked:text-indigo-600 cursor-pointer transition-all">Comment</div>
+                                        </label>
+                                        <label class="relative">
+                                            <input type="radio" name="type" value="Bug" class="peer sr-only">
+                                            <div class="p-3 text-center border border-slate-200 rounded-xl text-xs font-bold text-slate-500 peer-checked:bg-red-50 peer-checked:border-red-200 peer-checked:text-red-600 cursor-pointer transition-all">Bug</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Your Message</label>
+                                    <textarea name="message" required placeholder="Tell us what's on your mind..." 
+                                        class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none transition-all text-sm min-h-[120px] resize-none"></textarea>
+                                </div>
+                                <button type="submit" id="submitFeedbackBtn" 
+                                    class="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-slate-800 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                                    <i class="ph-bold ph-paper-plane-tilt"></i>
+                                    Submit Feedback
+                                </button>
+                            </form>
+                        </div>
+                    `;
+
+                    setTimeout(() => {
+                        const form = document.getElementById('feedbackForm');
+                        if (form) {
+                            form.onsubmit = async (e) => {
+                                e.preventDefault();
+                                const btn = document.getElementById('submitFeedbackBtn');
+                                const originalHtml = btn.innerHTML;
+                                
+                                const fd = new FormData(form);
+                                const userId = app.state.userId || 'Guest';
+                                const name = app.state.studentInfo ? app.state.studentInfo.name : 'Unknown User';
+                                const type = fd.get('type');
+                                const message = fd.get('message');
+
+                                btn.disabled = true;
+                                btn.innerHTML = '<div class="spinner w-4 h-4 border-2"></div> Sending...';
+
+                                DataService.saveFeedback(userId, name, type, message, (res) => {
+                                    if (res.success) {
+                                        app.showToast("Thank you! Feedback received.", "success");
+                                        form.reset();
+                                    } else {
+                                        app.showToast("Failed to send: " + res.error, "error");
+                                    }
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalHtml;
+                                });
+                            };
+                        }
+                    }, 0);
+
+                    return wrap;
                 },
             },
 
