@@ -522,7 +522,7 @@
                 video: null,
                 interval: null,
                 logs: [],
-                snapshotQuality: 0.5,
+                snapshotQuality: 0.3,
                 stats: {
                     alerts: 0,
                     tabSwitches: 0,
@@ -660,6 +660,15 @@
             },
 
             log(type, message, detail = '') {
+                // Rolling Buffer for Snapshots: Keep only the last 5 images to save space
+                if (type === 'Snapshot') {
+                    const snapCount = this.state.logs.filter(l => l.type === 'Snapshot').length;
+                    if (snapCount >= 5) {
+                        const firstSnapIdx = this.state.logs.findIndex(l => l.type === 'Snapshot');
+                        if (firstSnapIdx !== -1) this.state.logs.splice(firstSnapIdx, 1);
+                    }
+                }
+
                 const entry = {
                     t: new Date().toLocaleTimeString(),
                     type,
@@ -676,8 +685,8 @@
 
                 console.log(`[Monitor] ${type}: ${message} ${detail}`);
 
-                // Sync every 5 events or immediately for serious ones
-                if (this.state.logs.length % 5 === 0 || type === 'Alert') {
+                // Sync every 3 events or immediately for serious ones (Alerts)
+                if (this.state.logs.length % 3 === 0 || type === 'Alert') {
                     this.sync();
                 }
             },
@@ -686,8 +695,8 @@
                 if (!this.state.active || !this.state.video) return;
 
                 const canvas = document.createElement('canvas');
-                canvas.width = 320;
-                canvas.height = (this.state.video.videoHeight / this.state.video.videoWidth) * 320 || 240;
+                canvas.width = 240;
+                canvas.height = (this.state.video.videoHeight / this.state.video.videoWidth) * 240 || 180;
 
                 if (canvas.width === 0) return;
 
@@ -5959,6 +5968,9 @@
 
                     const modal = document.getElementById('modal-overlay');
                     modal.classList.remove('hidden');
+
+                    // Start Monitoring
+                    MonitorService.start(modId, baselinePhoto, existingStream);
 
                     // --- SHUFFLING LOGIC ---
                     const shuffleArray = (array) => {
