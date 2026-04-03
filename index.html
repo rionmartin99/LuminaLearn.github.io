@@ -384,8 +384,9 @@
             <div class="flex items-center gap-2">
                 <!-- REFRESH BUTTON -->
                 <button onclick="app.handlers.refreshViewer()"
-                    class="p-2 rounded-full hover:bg-slate-100 text-slate-500" title="Reload Document">
-                    <i class="ph ph-arrows-clockwise text-xl"></i>
+                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-all border border-transparent hover:border-slate-200" title="Reload Document">
+                    <i class="ph-bold ph-arrows-clockwise text-lg"></i>
+                    <span class="text-xs font-bold uppercase tracking-wider">Reload</span>
                 </button>
 
                 <!-- Progress Indicator (Hidden in Activity Mode) -->
@@ -2333,24 +2334,35 @@
                         app.state.activeFilter.grade = app.state.studentInfo.grade;
                     }
 
-                    // Filters
+                    // Filters: Only show Grade navigation for Teachers
                     const filters = document.createElement('div');
                     filters.className = "flex flex-wrap gap-2 pb-2";
-                    ['All', '7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].forEach(g => {
-                        const active = String(app.state.activeFilter.grade) === g;
-                        const theme = app.utils.getGradeTheme(g);
-                        const btn = document.createElement('button');
-                        btn.className = `px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${active ? theme.active : theme.bg + ' ' + theme.text + ' ' + theme.border} hover:shadow-sm`;
-                        btn.textContent = g === 'All' ? 'All Levels' : (isNaN(g) ? g : 'Grade ' + g);
-                        btn.onclick = () => app.setFilter('grade', g);
-                        filters.appendChild(btn);
-                    });
+                    if (isTeacher && !app.state.viewAsStudent) {
+                        ['All', '7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].forEach(g => {
+                            const active = String(app.state.activeFilter.grade) === g;
+                            const theme = app.utils.getGradeTheme(g);
+                            const btn = document.createElement('button');
+                            btn.className = `px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${active ? theme.active : theme.bg + ' ' + theme.text + ' ' + theme.border} hover:shadow-sm`;
+                            btn.textContent = g === 'All' ? 'All Levels' : (isNaN(g) ? g : 'Grade ' + g);
+                            btn.onclick = () => app.setFilter('grade', g);
+                            filters.appendChild(btn);
+                        });
+                        wrap.appendChild(filters);
+                    }
 
                     const subFilters = document.createElement('div');
                     subFilters.className = "flex flex-wrap gap-2 pb-2";
 
-                    // Dynamic Subject Filter
-                    const subjects = ['All', ...(app.state.data.subjects || [])];
+                    // Dynamic Subject Filter: For students, only show subjects available in their Grade
+                    let subjects = ['All', ...(app.state.data.subjects || [])];
+                    if (!isTeacher || app.state.viewAsStudent) {
+                        const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : 'All';
+                        const availableSubjects = (app.state.data.modules || [])
+                            .filter(m => String(m.grade) === studentGrade)
+                            .map(m => m.subject);
+                        subjects = ['All', ...[...new Set(availableSubjects)].sort()];
+                    }
+
                     subjects.forEach(s => {
                         const active = app.state.activeFilter.subject === s;
                         const theme = app.utils.getSubjectTheme(s);
@@ -2360,19 +2372,26 @@
                         btn.onclick = () => app.setFilter('subject', s);
                         subFilters.appendChild(btn);
                     });
+                    wrap.appendChild(subFilters);
 
                     const grid = document.createElement('div');
                     grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4";
 
                     // Ensure arrays exist
                     const rawMods = app.state.data.modules || [];
-                    const activeQuarter = (app.state.data.settings && app.state.data.settings.currentQuarter) || 'Q1';
+                    const activeQuarter = (app.state.data.settings && app.state.data.settings.currentQuarter) || 'Term 1';
 
                     const filteredModules = rawMods.filter(m => {
-                        const gMatch = (app.state.viewAsStudent || !isTeacher) && app.state.studentInfo ? (String(app.state.activeFilter.grade) === 'All' || String(m.grade) === String(app.state.activeFilter.grade)) : (app.state.activeFilter.grade === 'All' || String(m.grade) === String(app.state.activeFilter.grade));
-                        const sMatch = app.state.activeFilter.subject === 'All' || m.subject === app.state.activeFilter.subject;
+                        // Grade matching: Hard-lock for students to their assigned grade
+                        let gMatch = false;
+                        if (!isTeacher || app.state.viewAsStudent) {
+                            const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : null;
+                            gMatch = studentGrade ? (String(m.grade) === studentGrade) : true;
+                        } else {
+                            gMatch = (app.state.activeFilter.grade === 'All' || String(m.grade) === String(app.state.activeFilter.grade));
+                        }
 
-                        // Quarter filtering: enforced for students AND for teachers in student view
+                        const sMatch = app.state.activeFilter.subject === 'All' || m.subject === app.state.activeFilter.subject;
                         const qMatch = (isTeacher && !app.state.viewAsStudent) ? true : (m.quarter === activeQuarter);
                         return gMatch && sMatch && qMatch;
                     });
@@ -2554,27 +2573,37 @@
                         }
                     }
 
+                    // Prerequisites Check
+                    const hasContent = !!m.contentId;
+                    const hasApp = !!m.appId;
+
                     // STEP 1: READING (Content)
                     const step1 = document.createElement('div');
-                    step1.className = `p-5 rounded-2xl border ${prog.content ? 'border-green-200 bg-green-50/50' : 'border-brand-200 bg-white shadow-soft'}`;
+                    step1.className = `p-5 rounded-2xl border ${prog.content || !hasContent ? 'border-green-200 bg-green-50/50' : 'border-brand-200 bg-white shadow-soft'}`;
 
                     let contentBtnLabel, contentBtnIcon;
                     if (showTeacherUI) {
                         contentBtnLabel = 'View Learning Content';
                         contentBtnIcon = 'ph-book-open-text';
+                    } else if (!hasContent) {
+                        contentBtnLabel = 'No Content Provided';
+                        contentBtnIcon = 'ph-prohibit';
                     } else {
                         contentBtnLabel = prog.content ? 'Review Content' : 'Start Reading';
                         contentBtnIcon = prog.content ? 'ph-check-circle' : 'ph-book-open-text';
                     }
 
                     step1.innerHTML = `
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-8 h-8 rounded-full ${prog.content ? 'bg-green-500 text-white' : 'bg-brand-100 text-brand-600'} flex items-center justify-center font-bold">1</div>
-                                <h3 class="font-bold text-slate-800">Learning Content</h3>
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full ${prog.content || !hasContent ? 'bg-green-500 text-white' : 'bg-brand-100 text-brand-600'} flex items-center justify-center font-bold">${prog.content || !hasContent ? '<i class="ph-bold ph-check"></i>' : '1'}</div>
+                                    <h3 class="font-bold text-slate-800">Learning Content</h3>
+                                </div>
+                                ${!hasContent ? '<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">Empty</span>' : ''}
                             </div>
-                            <p class="text-sm text-slate-600 mb-4">Read the assigned material. ${showTeacherUI ? '' : 'You must complete the reading to unlock the next step.'}</p>
+                            <p class="text-sm text-slate-600 mb-4">${!hasContent ? 'The teacher has not uploaded any learning material for this module.' : 'Read the assigned material. ' + (showTeacherUI ? '' : 'You must complete the reading to unlock the next step.')}</p>
                             
-                            <button onclick="app.handlers.openViewer('${m.id}', 'content')" class="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${prog.content ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700'}">
+                            <button onclick="${hasContent ? `app.handlers.openViewer('${m.id}', 'content')` : ''}" ${!hasContent ? 'disabled' : ''} class="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${prog.content || !hasContent ? 'bg-green-100 text-green-700' : 'bg-brand-600 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700'} ${!hasContent ? 'opacity-50 cursor-not-allowed' : ''}">
                                 <i class="ph-bold ${contentBtnIcon}"></i> ${contentBtnLabel}
                             </button>
                         `;
@@ -2582,7 +2611,7 @@
 
                     // STEP 2: APPLICATION (Practice)
                     const step2 = document.createElement('div');
-                    const locked2 = !prog.content && !isTeacherMode;
+                    const locked2 = hasContent && !prog.content && !isTeacherMode;
 
                     // Teacher Logic: Count Pending
                     let pendingCount = 0;
@@ -2593,7 +2622,7 @@
                         });
                     }
 
-                    step2.className = `p-5 rounded-2xl border transition-all ${locked2 ? 'border-slate-100 locked-pattern opacity-70' : (isAppDone ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white shadow-soft')}`;
+                    step2.className = `p-5 rounded-2xl border transition-all ${locked2 ? 'border-slate-100 locked-pattern opacity-70' : (isAppDone || !hasApp ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white shadow-soft')}`;
 
                     let step2StatusHtml = '';
                     if (!locked2) {
@@ -2608,6 +2637,12 @@
                                             ${pendingCount > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">${pendingCount}</span>` : ''}
                                         </button>
                                     </div>
+                                `;
+                        } else if (!hasApp) {
+                            step2StatusHtml = `
+                                    <button disabled class="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed">
+                                        <i class="ph-bold ph-prohibit"></i> No Activity Sheet
+                                    </button>
                                 `;
                         } else {
                             // Student
@@ -2649,13 +2684,16 @@
                     }
 
                     step2.innerHTML = `
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-8 h-8 rounded-full ${locked2 ? 'bg-slate-200 text-slate-400' : (isAppDone ? 'bg-green-500 text-white' : (isAppPending ? 'bg-brand-100 text-brand-600' : 'bg-brand-100 text-brand-600'))} flex items-center justify-center font-bold">
-                                    ${locked2 ? '<i class="ph-bold ph-lock"></i>' : '2'}
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full ${locked2 ? 'bg-slate-200 text-slate-400' : (isAppDone || !hasApp ? 'bg-green-500 text-white' : (isAppPending ? 'bg-brand-100 text-brand-600' : 'bg-brand-100 text-brand-600'))} flex items-center justify-center font-bold">
+                                        ${locked2 ? '<i class="ph-bold ph-lock"></i>' : (isAppDone || !hasApp ? '<i class="ph-bold ph-check"></i>' : '2')}
+                                    </div>
+                                    <h3 class="font-bold text-slate-800">Activity Sheet</h3>
                                 </div>
-                                <h3 class="font-bold text-slate-800">Activity Sheet</h3>
+                                ${!hasApp ? '<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">Empty</span>' : ''}
                             </div>
-                            ${!locked2 ? `<p class="text-sm text-slate-600 mb-4">Complete the practice sheet. ${showTeacherUI ? '' : 'Once done, confirm your submission.'}</p>` : ''}
+                            <p class="text-sm text-slate-600 mb-4">${!hasApp ? 'The teacher has not uploaded an activity sheet for this module.' : 'Complete the practice sheet. ' + (showTeacherUI ? '' : 'Once done, confirm your submission.')}</p>
                             ${step2StatusHtml}
                         `;
                     content.appendChild(step2);
@@ -2663,8 +2701,8 @@
                     // STEP 3: ASSESSMENT
                     const step3 = document.createElement('div');
                     const modType = m.modType || 'Quiz';
-                    // Unlock if App is Done OR Pending for Students, but TEACHER is always unlocked
-                    const locked3 = (!isAppDone && !isAppPending) && !isTeacherMode;
+                    // Unlock if all prerequisites are met, skipping empty steps
+                    const locked3 = ((hasContent && !prog.content) || (hasApp && !isAppDone && !isAppPending)) && !isTeacherMode;
                     step3.className = `p-5 rounded-2xl border transition-all ${locked3 ? 'border-slate-100 locked-pattern opacity-70' : 'border-accent-200 bg-orange-50/30 shadow-soft'}`;
 
                     // 1. Calculate Leaderboard
@@ -3176,13 +3214,22 @@
                             const listEl = document.getElementById('profile-progress-list');
                             if (!listEl) return;
                             if (res.success && res.progress && res.progress.length > 0) {
-                                listEl.innerHTML = res.progress.map(p => `
-                                        <div class="flex items-center justify-between py-2 px-1 border-b border-slate-50 last:border-0">
+                                // Filter by student's current grade for clarity
+                                const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : 'All';
+                                const filtered = res.progress.filter(p => !p.grade || String(p.grade) === studentGrade);
+                                
+                                if (filtered.length === 0) {
+                                    listEl.innerHTML = '<p class="text-xs text-slate-400 italic py-2">No modules for this grade yet.</p>';
+                                    return;
+                                }
+
+                                listEl.innerHTML = filtered.map(p => `
+                                        <div class="flex items-center justify-between py-2 px-1 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                             <div class="flex-1 min-w-0">
-                                                <p class="text-sm font-bold text-slate-800 truncate">${p.moduleTitle}</p>
-                                                <p class="text-[10px] text-slate-400">${p.score ? p.score + '%' : 'Completed'}</p>
+                                                <p class="text-sm font-bold text-slate-800 truncate">${p.moduleTitle || 'Untitled Module'}</p>
+                                                <p class="text-[10px] text-slate-400 uppercase font-bold">${p.subject || 'General'}</p>
                                             </div>
-                                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">${p.points || (p.score ? p.score + '%' : 'Done')}</span>
+                                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">${p.score !== null ? p.score + '%' : (p.points || 'Done')}</span>
                                         </div>
                                     `).join('');
                             } else {
@@ -4754,29 +4801,30 @@
                     setTimeout(() => app.showToast('CSV Download Started!', 'success'), 1000);
                 },
 
-                markComplete(modId, step, status = true) {
+                markComplete(modId, step, status = true, callback = null) {
                     if (app.state.viewAsStudent) {
                         app.showToast("Student View: Progress not recorded.", "info");
+                        if (typeof callback === 'function') callback();
+                        return;
                     }
 
                     // Logic: If Student is submitting Activity (status === 'pending'), show Modal first.
-                    // If Teacher, just proceed.
                     const isTeacher = app.state.userMode === 'teacher' && !app.state.viewAsStudent;
 
                     if (!isTeacher && step === 'app' && status === 'pending') {
                         app.handlers.showStudentDetailsModal(modId, (details) => {
-                            // On Confirm, submit with details
                             const photoVal = details.activityPhoto || 'submitted_offline';
                             DataService.submitProgress(modId, step, photoVal, details, null, () => {
                                 app.refreshData();
                                 app.showToast('Activity Submitted!', 'success');
+                                if (typeof callback === 'function') callback();
                             });
                         });
                     } else {
                         // Standard complete (Content or Teacher actions)
                         DataService.submitProgress(modId, step, status, null, null, () => {
                             app.refreshData();
-                            if (typeof status === 'function') status(); // Status as callback wrapper
+                            if (typeof callback === 'function') callback();
                         });
                     }
                 },
@@ -5123,6 +5171,7 @@
 
                         if (app.state.readingProgress >= 95) {
                             btn.disabled = false;
+                            btn.className = "w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-brand-600 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700";
                             btn.innerHTML = `
                                 <div id="check-status-icon" class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white transition-colors duration-300 shadow-lg shadow-green-200">
                                     <i class="ph-bold ph-check"></i>
@@ -5130,7 +5179,7 @@
                                 <span id="mark-read-text">Mark as Read</span>
                             `;
                         } else if (remainingSecs != null) {
-                            btnText.textContent = `Please wait ${remainingSecs}s...`;
+                            btnText.innerHTML = `<span class="text-slate-400 font-medium text-xs">Please wait ${remainingSecs}s...</span>`;
                         }
                     }
                 },
