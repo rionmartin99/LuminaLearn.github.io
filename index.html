@@ -1,9 +1,9 @@
 <!--
+    v3.6.9 - 2026-04-04 02:35 PM: [FIX] Full visibility for all students in Item Analysis. Added "Analyzed X of Y" reporting for historical data transparency.
+    v3.6.8 - 2026-04-04 02:30 PM: [FIX] Fixed missing analysis variable sync in quiz submission. Removed "$" symbols from Pedagogical Guide.
+    v3.6.7 - 2026-04-04 02:25 PM: [FIX] Full Classical Test Theory expansion in Item Analysis. Fixed undefined data and table alignment. Added student name fallback in class results.
     v3.6.6 - 2026-04-04 11:23 AM: [FIX] Resolved TypeError by adding missing modeToggleBtn ID and implementing defensive null-checks in auth handlers.
     v3.6.5 - 2026-04-04 11:15 AM: [FIX] Consolidated duplicate logout handlers and enabled closeModal to fix unresponsive Yes, Logout button.
-    v3.6.4 - 2026-04-04 10:45 AM: [FEATURE] Separated Theme Toggle and Logout. Implemented Logout Confirmation. Enhanced Dark Mode CSS.
-    v3.6.4 - 2026-04-04 10:15 AM: [FEATURE] Password-protected profile updates and dark mode foundation.
-    v3.6.3 - 2026-04-04 09:55 AM: [FEATURE] Rebranded to "Lumina" and added tagline "Shed Light on Learning".
     -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v3.6.6</title>
+    <title>Lumina v3.6.9</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -3440,9 +3440,16 @@
                     Object.keys(allProg).forEach(userId => {
                         const entry = allProg[userId][modId];
                         if (entry && entry.score !== null && entry.score !== undefined) {
+                            // Name Fallback: If progress sheet has no name, look up in students list
+                            let studentName = entry.name;
+                            if (!studentName || studentName === 'Anonymous') {
+                                const s = app.state.data.students ? app.state.data.students.find(x => x.userId == userId) : null;
+                                if (s) studentName = s.name;
+                            }
+
                             rows.push({
                                 id: userId,
-                                student: entry.name || 'Anonymous',
+                                student: studentName || 'Anonymous',
                                 photo: entry.photo || '',
                                 grade: entry.grade || '-',
                                 section: entry.section || '-',
@@ -3588,7 +3595,7 @@
                                             </div>
                                             <div>
                                                 <h3 class="font-display font-black text-slate-800 text-xl uppercase tracking-tight">${modType} Item Analysis</h3>
-                                                <p class="text-xs text-slate-500 font-medium">${m.title} &bull; ${res.totalStudents} Students Analyzed</p>
+                                                <p class="text-xs text-slate-500 font-medium">${m.title} &bull; Analyzed ${res.analyzedStudents || res.totalStudents} of ${res.totalStudents} Attempts</p>
                                             </div>
                                         </div>
                                         <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="w-10 h-10 flex items-center justify-center hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
@@ -3596,72 +3603,61 @@
                                         </button>
                                     </div>
                                     
-                                    <div class="overflow-y-auto flex-1 p-6">
-                                        <!-- HEADER STATS -->
-                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reliability</p>
-                                                <p class="text-lg font-bold text-slate-800">High</p>
-                                            </div>
-                                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Standard</p>
-                                                <p class="text-lg font-bold text-slate-800">DepEd</p>
-                                            </div>
-                                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Method</p>
-                                                <p class="text-lg font-bold text-slate-800">CTT 27%</p>
-                                            </div>
-                                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Beta</p>
-                                                <p class="text-lg font-bold text-slate-800">v3.1.0</p>
-                                            </div>
-                                        </div>
+                                     <div class="overflow-y-auto flex-1 p-6">
+                                         <!-- HEADER STATS -->
+                                         <div class="grid grid-cols-1 gap-4 mb-8">
+                                             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                                 <div>
+                                                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Measurement Method</p>
+                                                     <p class="text-lg font-bold text-slate-800">Classical Test Theory (CTT)</p>
+                                                 </div>
+                                                 <div class="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-tight">DepEd Order No. 8, s. 2015</div>
+                                             </div>
+                                         </div>
 
-                                        <div class="overflow-x-auto rounded-2xl border border-slate-100">
-                                            <table class="w-full text-sm text-left border-collapse">
-                                                <thead class="bg-slate-900 text-white font-bold uppercase tracking-wider text-[10px]">
-                                                    <tr>
-                                                        <th class="px-4 py-4 border-r border-slate-800">#</th>
-                                                        <th class="px-4 py-4 min-w-[200px]">Question Snippet</th>
-                                                        <th class="px-4 py-4 text-center">Correct ($R$)</th>
-                                                        <th class="px-4 py-4 text-center">Diff. Index ($P$)</th>
-                                                        <th class="px-4 py-4 text-center">Disc. Index ($D$)</th>
-                                                        <th class="px-4 py-4">Interpretation</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="divide-y divide-slate-100">
-                                                    ${items.map((it, i) => `
-                                                        <tr class="hover:bg-slate-50/50 transition-colors">
-                                                            <td class="px-4 py-4 font-mono font-bold text-slate-400 border-r border-slate-100">${i + 1}</td>
-                                                            <td class="px-4 py-4">
-                                                                <p class="text-slate-800 font-medium line-clamp-1 text-xs" title="${it.question}">${it.question}</p>
-                                                            </td>
-                                                            <td class="px-4 py-4 text-center">
-                                                                <span class="inline-block px-2 py-1 bg-slate-100 rounded-lg font-bold text-slate-600">${it.correctResponses}</span>
-                                                            </td>
-                                                            <td class="px-4 py-4 text-center">
-                                                            <td class="px-4 py-4">
-                                                                    <div class="flex gap-2 justify-center">
-                                                                        <div class="px-2.5 py-1 bg-slate-100 rounded text-[10px] uppercase tracking-wider text-slate-500 text-center flex flex-col">
-                                                                            <span>Difficulty</span>
-                                                                            <span class="font-black text-slate-800">${Number(it.difficultyIndex).toFixed(2)}</span>
-                                                                        </div>
-                                                                        <div class="px-2.5 py-1 bg-slate-100 rounded text-[10px] uppercase tracking-wider text-slate-500 text-center flex flex-col">
-                                                                            <span>Discrimination</span>
-                                                                            <span class="font-black text-slate-800">${Number(it.discriminationIndex).toFixed(2)}</span>
-                                                                        </div>
-                                                                    </div>
-                                                            </td>
-                                                            <td class="px-4 py-4">
-                                                                <span class="inline-flex px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight shadow-sm border ${it.action === 'Retain' ? 'bg-green-50 text-green-700 border-green-100' : (it.action === 'Revise' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100')}">
-                                                                    ${it.interpretation}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    `).join('')}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                         <div class="overflow-x-auto rounded-2xl border border-slate-100">
+                                             <table class="w-full text-sm text-left border-collapse">
+                                                 <thead class="bg-slate-900 text-white font-bold uppercase tracking-wider text-[10px]">
+                                                     <tr>
+                                                         <th class="px-4 py-4 border-r border-slate-800">#</th>
+                                                         <th class="px-4 py-4 min-w-[200px]">Question Snippet</th>
+                                                         <th class="px-4 py-4 text-center">Correct (R)</th>
+                                                         <th class="px-4 py-4 text-center">Indices (P & D)</th>
+                                                         <th class="px-4 py-4 text-right">Interpretation</th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody class="divide-y divide-slate-100">
+                                                     ${items.map((it, i) => `
+                                                         <tr class="hover:bg-slate-50/50 transition-colors">
+                                                             <td class="px-4 py-4 font-mono font-bold text-slate-400 border-r border-slate-100">${i + 1}</td>
+                                                             <td class="px-4 py-4">
+                                                                 <p class="text-slate-800 font-medium line-clamp-1 text-xs" title="${it.question}">${it.question}</p>
+                                                             </td>
+                                                             <td class="px-4 py-4 text-center">
+                                                                 <span class="inline-block px-2 py-1 bg-slate-100 rounded-lg font-bold text-slate-600">${it.correctResponses}</span>
+                                                             </td>
+                                                             <td class="px-4 py-4">
+                                                                     <div class="flex gap-2 justify-center">
+                                                                         <div class="px-2.5 py-1 bg-slate-50 border border-slate-100 rounded text-[10px] uppercase tracking-wider text-slate-500 text-center flex flex-col min-w-[70px]">
+                                                                             <span>Difficulty</span>
+                                                                             <span class="font-black text-slate-800">${it.difficultyIndex}</span>
+                                                                         </div>
+                                                                         <div class="px-2.5 py-1 bg-slate-50 border border-slate-100 rounded text-[10px] uppercase tracking-wider text-slate-500 text-center flex flex-col min-w-[70px]">
+                                                                             <span>Discrimination</span>
+                                                                             <span class="font-black text-slate-800">${it.discriminationIndex}</span>
+                                                                         </div>
+                                                                     </div>
+                                                             </td>
+                                                             <td class="px-4 py-4 text-right">
+                                                                 <span class="inline-flex px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight shadow-sm border ${it.action === 'Retain' ? 'bg-green-50 text-green-700 border-green-100' : (it.action === 'Revise' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-red-50 text-red-700 border-red-100')}">
+                                                                     ${it.interpretation} &bull; ${it.action}
+                                                                 </span>
+                                                             </td>
+                                                         </tr>
+                                                     `).join('')}
+                                                 </tbody>
+                                             </table>
+                                         </div>
 
                                         <!-- LEGEND -->
                                         <div class="mt-8 p-6 bg-slate-50 rounded-3xl border border-slate-100">
@@ -3670,7 +3666,7 @@
                                             </h4>
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-[10px] leading-relaxed">
                                                 <div>
-                                                    <p class="font-bold text-slate-700 mb-2 uppercase">Difficulty Index ($P$)</p>
+                                                    <p class="font-bold text-slate-700 mb-2 uppercase">Difficulty Index</p>
                                                     <ul class="space-y-1.5 text-slate-500">
                                                         <li><strong class="text-slate-700">0.00 - 0.20:</strong> Very Difficult (Revise/Discard)</li>
                                                         <li><strong class="text-slate-700">0.21 - 0.80:</strong> Moderate (Retain)</li>
@@ -3678,7 +3674,7 @@
                                                     </ul>
                                                 </div>
                                                 <div>
-                                                    <p class="font-bold text-slate-700 mb-2 uppercase">Discrimination Index ($D$)</p>
+                                                    <p class="font-bold text-slate-700 mb-2 uppercase">Discrimination Index</p>
                                                     <ul class="space-y-1.5 text-slate-500">
                                                         <li><strong class="text-slate-700">0.40+:</strong> Very Good Item</li>
                                                         <li><strong class="text-slate-700">0.20 - 0.39:</strong> Marginal (Revise)</li>
@@ -6180,8 +6176,10 @@
 
                     const renderQ = () => {
                         if (currentQ >= quizData.length) {
-                            // Handle empty quiz case to prevent NaN
-                            const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
+                             // Handle empty quiz case to prevent NaN
+                             const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
+                             const pointsStr = score + '/' + quizData.length;
+                             const analysisStr = JSON.stringify(app.state.currentQuizResults);
 
                             // Show Processing UI immediately
                             modal.innerHTML = `
