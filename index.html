@@ -1,9 +1,10 @@
 <!--
-    v3.6.9 - 2026-04-04 02:35 PM: [FIX] Full visibility for all students in Item Analysis. Added "Analyzed X of Y" reporting for historical data transparency.
+    v3.8.3 - 2026-04-05 05:30:00: [FIX] Emergency SyntaxError correction (missing closing brace in handlers).
+    v3.8.2 - 2026-04-05 05:27:00: [FIX] Emergency SyntaxError correction (missing template literal termination).
+    v3.8.1 - 2026-04-05 05:20:00: [FIX] Restored Submit button responsiveness. Switched to direct interaction for Activity Submission.
+    v3.8.0 - 2026-04-05 05:13:00: [STABILITY] Final submission pass. Added Quiz/Exam Retry Sync and reinforced teacher updates.
+    v3.7.9 - 2026-04-05 05:12:00: [OPTIMIZE] Activity Submission payload reduction.
     v3.6.8 - 2026-04-04 02:30 PM: [FIX] Fixed missing analysis variable sync in quiz submission. Removed "$" symbols from Pedagogical Guide.
-    v3.6.7 - 2026-04-04 02:25 PM: [FIX] Full Classical Test Theory expansion in Item Analysis. Fixed undefined data and table alignment. Added student name fallback in class results.
-    v3.6.6 - 2026-04-04 11:23 AM: [FIX] Resolved TypeError by adding missing modeToggleBtn ID and implementing defensive null-checks in auth handlers.
-    v3.6.5 - 2026-04-04 11:15 AM: [FIX] Consolidated duplicate logout handlers and enabled closeModal to fix unresponsive Yes, Logout button.
     -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +12,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v3.6.9</title>
+    <title>Lumina v3.8.3</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -109,56 +110,119 @@
         }
 
         /* Dark Mode Core */
-        .dark { color-scheme: dark; }
-        .dark body { background-color: #0f172a; color: #f1f5f9; }
-        
-        /* Background Overrides */
-        .dark .bg-white { background-color: #1e293b !important; }
-        .dark .bg-slate-50 { background-color: #0f172a !important; }
-        .dark .bg-slate-100 { background-color: #334155 !important; }
-        
-        /* Text Overrides */
-        .dark .text-slate-800, .dark .text-slate-900 { color: #f1f5f9 !important; }
-        .dark .text-slate-600, .dark .text-slate-700 { color: #cbd5e1 !important; }
-        .dark .text-slate-500 { color: #94a3b8 !important; }
-        .dark .text-slate-400 { color: #64748b !important; }
-        
-        /* Border Overrides */
-        .dark .border-slate-100, 
-        .dark .border-slate-200, 
-        .dark .border-slate-50,
-        .dark .border-slate-300 { border-color: #334155 !important; }
-        
-        /* Component Specifics */
-        .dark header { background-color: #1e293b !important; border-color: #334155 !important; }
-        .dark footer { background-color: #1e293b !important; border-color: #334155 !important; }
-        .dark .modal-content { background-color: #1e293b !important; border-color: #475569 !important; }
-        
-        /* Inputs & Interactive */
-        .dark input, .dark select, .dark textarea { 
-            background-color: #0f172a !important; 
-            border-color: #334155 !important; 
-            color: #f1f5f9 !important; 
+        .dark {
+            color-scheme: dark;
         }
-        .dark input:focus, .dark select:focus {
+
+        .dark body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+
+        /* Background Overrides */
+        .dark .bg-white,
+        .dark [class*="bg-white/"] {
+            background-color: #1e293b !important;
+        }
+
+        .dark .bg-slate-50,
+        .dark [class*="bg-slate-50/"] {
+            background-color: #0f172a !important;
+        }
+
+        .dark .bg-slate-100,
+        .dark [class*="bg-slate-100/"] {
+            background-color: #334155 !important;
+        }
+
+        /* Text Overrides */
+        .dark .text-slate-800,
+        .dark .text-slate-900,
+        .dark h1, .dark h2, .dark h3, .dark h4 {
+            color: #f1f5f9 !important;
+        }
+
+        .dark .text-slate-600,
+        .dark .text-slate-700 {
+            color: #cbd5e1 !important;
+        }
+
+        .dark .text-slate-500 {
+            color: #94a3b8 !important;
+        }
+
+        .dark .text-slate-400 {
+            color: #64748b !important;
+        }
+
+        /* Border Overrides */
+        .dark .border-slate-100,
+        .dark .border-slate-200,
+        .dark .border-slate-50,
+        .dark .border-slate-300,
+        .dark [class*="border-slate-"] {
+            border-color: #334155 !important;
+        }
+
+        /* Component Specifics */
+        .dark header {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+
+        .dark footer {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+
+        .dark .modal-content {
+            background-color: #1e293b !important;
+            border-color: #475569 !important;
+        }
+
+        /* Inputs & Interactive */
+        .dark input,
+        .dark select,
+        .dark textarea {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f1f5f9 !important;
+        }
+
+        .dark input:focus,
+        .dark select:focus {
             border-color: #14b8a6 !important;
             background-color: #1e293b !important;
         }
 
         /* Lists & Tables */
-        .dark .divide-slate-100 > * + *, .dark .divide-slate-200 > * + * {
+        .dark .divide-slate-100>*+*,
+        .dark .divide-slate-200>*+* {
             border-color: #334155 !important;
         }
 
         /* Shadow Adjustments */
-        .dark .shadow-soft, .dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg, .dark .shadow-xl { 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1) !important; 
+        .dark .shadow-soft,
+        .dark .shadow-sm,
+        .dark .shadow-md,
+        .dark .shadow-lg,
+        .dark .shadow-xl {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1) !important;
         }
 
         /* Custom Scrollbar for Dark Mode */
-        .dark ::-webkit-scrollbar-track { background: #0f172a; }
-        .dark ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .dark ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
 
         .hide-scrollbar::-webkit-scrollbar {
             display: none;
@@ -318,7 +382,8 @@
                 alt="Lumina" class="w-14 h-14 rounded-xl object-cover shadow-sm bg-white">
             <div class="flex flex-col">
                 <h1 class="font-display font-bold text-xl tracking-tight text-slate-900 leading-none">Lumina</h1>
-                <span class="text-[9px] text-slate-400 font-medium tracking-[0.1em] uppercase mt-1">Shed Light on Learning</span>
+                <span class="text-[9px] text-slate-400 font-medium tracking-[0.1em] uppercase mt-1">Shed Light on
+                    Learning</span>
             </div>
         </div>
         <div class="flex items-center gap-2">
@@ -326,7 +391,7 @@
                 <p class="text-xs text-slate-500 font-medium">Mode</p>
                 <p class="text-sm font-bold text-slate-800 dark:text-slate-200" id="roleDisplay">Student</p>
             </div>
-            
+
             <!-- Theme Toggle -->
             <button id="modeToggleBtn" onclick="app.handlers.toggleTheme()"
                 class="p-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 transition-all active:scale-95"
@@ -687,12 +752,12 @@
                     copy: () => {
                         const text = window.getSelection().toString();
                         const preview = text.length > 150 ? text.substring(0, 150) + '...' : text;
-                        this.log('Clipboard', 'Content Copied', preview ? `"${preview}"` : 'To Clipboard');
+                        this.log('Alert', 'Copy Attempted', preview ? `"${preview}"` : 'To Clipboard');
                     },
                     paste: (e) => {
                         let content = (e.clipboardData || window.clipboardData).getData('text');
                         let preview = content.length > 150 ? content.substring(0, 150) + '...' : content;
-                        this.log('Clipboard', 'Content Pasted', `"${preview}"`);
+                        this.log('Alert', 'Paste Attempted', `"${preview}"`);
                     },
                     keydown: (e) => {
                         // Only capture printable characters and space
@@ -751,8 +816,8 @@
 
                 console.log(`[Monitor] ${type}: ${message} ${detail}`);
 
-                // Sync every 3 events or immediately for serious ones (Alerts)
-                if (this.state.logs.length % 3 === 0 || type === 'Alert') {
+                // Sync every 3 events or immediately for serious ones (Alerts, System)
+                if (this.state.logs.length % 3 === 0 || type === 'Alert' || type === 'System') {
                     this.sync();
                 }
             },
@@ -1077,14 +1142,31 @@
 
 
             async updateModule(form, callback) {
-                // GAS mode: pass form natively
-                if (typeof google !== 'undefined' && google.script && google.script.run) {
-                    BackEndService.call('updateModule', [form]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
-                    return;
-                }
-                // Standalone/fetch mode: serialize to plain object + base64 files
                 try {
                     const fd = new FormData(form);
+                    
+                    // Construct Payload Object (Consistent across GAS and Standalone)
+                    const payload = {
+                        userId: app.state.userId || '',
+                        modId: fd.get('modId') || '',
+                        password: fd.get('password') || '',
+                        title: fd.get('title') || '',
+                        description: fd.get('description') || '',
+                        subject: fd.get('subject') || '',
+                        grade: fd.get('grade') || '',
+                        quarter: fd.get('quarter') || 'Term 1',
+                        modType: fd.get('modType') || 'Quiz',
+                        expiration: fd.get('expiration') || '',
+                        isActive: fd.get('isActive') === 'on' || fd.get('isActive') === 'true',
+                        assignedClasses: Array.from(fd.getAll('assignedClassesOpt')).join(','),
+                        youtubeUrl: fd.get('youtubeUrl') || ''
+                    };
+
+                    // GAS mode: Send serialized payload
+                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+                        BackEndService.call('updateModule', [payload]).then(callback).catch(e => callback({ success: false, error: e.toString() }));
+                        return;
+                    }
 
                     // --- SIZE VALIDATION ---
                     const contentFile = fd.get('contentFile');
@@ -1097,21 +1179,6 @@
                         const sizeMb = (totalSize / (1024 * 1024)).toFixed(1);
                         throw new Error(`Total file size (${sizeMb}MB) exceeds the 35MB limit for standalone mode. Please use smaller files or compress your videos/PDFs.`);
                     }
-
-                    const payload = {
-                        userId: app.state.userId || '',
-                        modId: fd.get('modId') || '',
-                        password: fd.get('password') || '',
-                        title: fd.get('title') || '',
-                        description: fd.get('description') || '',
-                        subject: fd.get('subject') || '',
-                        grade: fd.get('grade') || '',
-                        quarter: fd.get('quarter') || 'Term 1',
-                        modType: fd.get('modType') || 'Quiz',
-                        expiration: fd.get('expiration') || '',
-                        youtubeUrl: '',
-                        isActive: fd.get('isActive') === 'on' || fd.get('isActive') === 'true'
-                    };
 
                     const readFileAsBase64 = (file) => new Promise((res) => {
                         if (!file || file.size === 0) { res(null); return; }
@@ -1153,7 +1220,8 @@
                         finalClassCode = 'TEACHER_ACCESS';
                     }
 
-                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, section, password, finalClassCode, username, gender]);
+                    const normalizedSection = section ? section.toString().toUpperCase().trim() : '';
+                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, normalizedSection, password, finalClassCode, username, gender]);
 
                     callback(res);
                 } catch (err) {
@@ -1285,62 +1353,77 @@
             async updateUsername(userId, newUsername, password, callback) {
                 try {
                     const res = await BackEndService.call('updateUsername', [userId, newUsername, password]);
-                    callback(res || { success: true });
+                    if (callback) callback(res || { success: true });
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Username Update Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
+                }
+            },
+
+            async updateAcademicInfo(userId, grade, section, password, callback) {
+                try {
+                    const res = await BackEndService.call('updateAcademicInfo', [userId, grade, section, password]);
+                    if (callback) callback(res || { success: true });
+                } catch (err) {
+                    console.error("[Data] Academic Info Update Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
 
             async updateProfileImage(userId, base64, callback) {
                 try {
                     const res = await BackEndService.call('updateProfileImage', [userId, base64]);
-                    callback(res || { success: true });
+                    if (callback) callback(res || { success: true });
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Profile Image Update Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
 
             async changePassword(userId, oldPassword, newPassword, callback) {
                 try {
                     const res = await BackEndService.call('changePassword', [userId, oldPassword, newPassword]);
-                    callback(res);
+                    if (callback) callback(res);
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Password Change Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
 
             async saveFeedback(userId, name, type, message, callback) {
                 try {
                     const res = await BackEndService.call('saveFeedback', [userId, name, type, message]);
-                    callback(res);
+                    if (callback) callback(res);
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Save Feedback Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
 
             async updateGender(userId, newGender, password, callback) {
                 try {
                     const res = await BackEndService.call('updateGender', [userId, newGender, password]);
-                    callback(res || { success: true });
+                    if (callback) callback(res || { success: true });
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Gender Update Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
-
 
             async updateSecretQuestion(userId, question, answer, callback) {
                 try {
                     const res = await BackEndService.call('updateSecretQuestion', [userId, question, answer]);
-                    callback(res);
+                    if (callback) callback(res);
                 } catch (err) {
-                    callback({ success: false, error: err });
+                    console.error("[Data] Secret Question Update Error:", err);
+                    if (callback) callback({ success: false, error: err.toString() });
                 }
             },
 
             async recoverAccountStep1(firstName, lastName, grade, section, studentId, callback) {
                 try {
                     const res = await BackEndService.call('recoverAccountStep1', [firstName, lastName, grade, section, studentId]);
-                    callback(res);
+                    if (callback) callback(res);
                 } catch (err) {
                     callback({ success: false, error: err });
                 }
@@ -1412,6 +1495,35 @@
         */
         const app = {
             utils: {
+                getFilteredLevels() {
+                    const s = app.state.data.settings || {};
+                    const levels = [];
+                    if (s.pref_show_hs !== 'false') levels.push('7', '8', '9', '10', '11', '12');
+                    if (s.pref_show_college !== 'false') levels.push('First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year');
+                    if (s.pref_show_others !== 'false') levels.push('Summer Class', 'Tutorial Session');
+                    return levels.length > 0 ? levels : ['7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'];
+                },
+                isLevelEnabled(grade) {
+                    const s = app.state.data.settings || {};
+                    const g = String(grade);
+                    if (['7', '8', '9', '10', '11', '12'].includes(g)) return s.pref_show_hs !== 'false';
+                    if (['First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year'].includes(g)) return s.pref_show_college !== 'false';
+                    if (['Summer Class', 'Tutorial Session'].includes(g)) return s.pref_show_others !== 'false';
+                    return true;
+                },
+                getUniqueSections() {
+                    const sections = new Set();
+                    // Add from global student data if available
+                    if (app.state.data.progress) {
+                        Object.values(app.state.data.progress).forEach(studentMods => {
+                            Object.values(studentMods).forEach(p => {
+                                if (p.section) sections.add(p.section.toString().toUpperCase().trim());
+                            });
+                        });
+                    }
+                    // Return as sorted array
+                    return Array.from(sections).filter(s => s && s !== 'undefined').sort();
+                },
                 getDriveImageUrl(url) {
                     if (!url) return url;
                     if (url.startsWith('data:')) return url;
@@ -1909,15 +2021,13 @@
                                                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
                                                 <select name="grade" ${app.state.regRole === 'student' ? 'required' : ''} class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white">
                                                     <option value="" disabled selected>Select level</option>
-                                                    <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
-                                                    <option value="First Year">First Year</option><option value="Second Year">Second Year</option><option value="Third Year">Third Year</option><option value="Fourth Year">Fourth Year</option><option value="Fifth Year">Fifth Year</option>
-                                                    <option value="Summer Class">Summer Class</option><option value="Tutorial Session">Tutorial Session</option>
+                                                    ${app.utils.getFilteredLevels().map(lvl => `<option value="${lvl}">${lvl}</option>`).join('')}
                                                 </select>
                                             </div>
                                         </div>
                                         <div class="${app.state.regRole === 'teacher' ? 'hidden' : ''}">
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
-                                            <input type="text" name="section" ${app.state.regRole === 'student' ? 'required' : ''} maxlength="20" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Class/Section</label>
+                                            <input type="text" name="section" ${app.state.regRole === 'student' ? 'required' : ''} maxlength="20" placeholder="e.g. RUTHERFORD" oninput="this.value = this.value.toUpperCase().trim()" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
                                         </div>
 
                                         <div>
@@ -2030,7 +2140,7 @@
                                     </div>
                                     <form id="loginForm" class="space-y-4">
                                         <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username or Student ID</label>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username or Lumina ID</label>
                                             <div class="relative">
                                                 <i class="ph ph-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
                                                 <input type="text" name="identifier" required class="w-full pl-10 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors font-medium">
@@ -2425,15 +2535,17 @@
                     const filters = document.createElement('div');
                     filters.className = "flex flex-wrap gap-2 pb-2";
                     if (isTeacher && !app.state.viewAsStudent) {
-                        ['All', '7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].forEach(g => {
-                            const active = String(app.state.activeFilter.grade) === g;
-                            const theme = app.utils.getGradeTheme(g);
-                            const btn = document.createElement('button');
-                            btn.className = `px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${active ? theme.active : theme.bg + ' ' + theme.text + ' ' + theme.border} hover:shadow-sm`;
-                            btn.textContent = g === 'All' ? 'All Levels' : (isNaN(g) ? g : 'Grade ' + g);
-                            btn.onclick = () => app.setFilter('grade', g);
-                            filters.appendChild(btn);
-                        });
+                        ['All', '7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session']
+                            .filter(g => g === 'All' || app.utils.isLevelEnabled(g))
+                            .forEach(g => {
+                                const active = String(app.state.activeFilter.grade) === g;
+                                const theme = app.utils.getGradeTheme(g);
+                                const btn = document.createElement('button');
+                                btn.className = `px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${active ? theme.active : theme.bg + ' ' + theme.text + ' ' + theme.border} hover:shadow-sm`;
+                                btn.textContent = g === 'All' ? 'All Levels' : (isNaN(g) ? g : 'Grade ' + g);
+                                btn.onclick = () => app.setFilter('grade', g);
+                                filters.appendChild(btn);
+                            });
                         wrap.appendChild(filters);
                     }
 
@@ -2480,7 +2592,8 @@
 
                         const sMatch = app.state.activeFilter.subject === 'All' || m.subject === app.state.activeFilter.subject;
                         const qMatch = (isTeacher && !app.state.viewAsStudent) ? true : (m.quarter === activeQuarter);
-                        return gMatch && sMatch && qMatch;
+                        const lMatch = app.utils.isLevelEnabled(m.grade);
+                        return gMatch && sMatch && qMatch && lMatch;
                     });
 
 
@@ -2597,19 +2710,21 @@
                     const isAppPending = prog.app === 'pending' || prog.app === 'submitted_offline' || (typeof prog.app === 'string' && (prog.app.startsWith('data:image') || prog.app.startsWith('[')));
 
                     const wrap = document.createElement('div');
-                    wrap.className = "min-h-full bg-white flex flex-col fade-in";
+                    wrap.className = "min-h-full bg-white dark:bg-slate-900 flex flex-col fade-in";
 
                     wrap.innerHTML = `
-                            <div class="p-4 border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur z-10 flex items-center justify-between">
+                            <div class="p-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur z-10 flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <button onclick="app.navigate('dashboard')" class="p-2 -ml-2 rounded-full hover:bg-slate-100"><i class="ph ph-arrow-left text-xl"></i></button>
+                                    <button onclick="app.navigate('dashboard')" class="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                        <i class="ph ph-arrow-left text-xl"></i>
+                                    </button>
                                     <div>
-                                        <h2 class="font-display font-bold text-slate-900 leading-none">${m.title}</h2>
-                                        <p class="text-xs text-slate-500 mt-1">${m.subject} • ${m.quarter || 'Q1'} • ${m.modType || 'Quiz'}</p>
+                                        <h2 class="font-display font-bold text-slate-900 dark:text-white leading-none">${m.title}</h2>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${m.subject} • ${m.quarter || 'Q1'} • ${m.modType || 'Quiz'}</p>
                                     </div>
                                 </div>
                                 ${showTeacherUI ? `
-                                    <button onclick="app.components.showSettingsModal('${m.id}')" class="p-2 rounded-full hover:bg-slate-100 text-slate-600">
+                                    <button onclick="app.components.showSettingsModal('${m.id}')" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
                                         <i class="ph-bold ph-gear" title="Module Settings"></i>
                                     </button>
                                 ` : ''}
@@ -2837,26 +2952,60 @@
                                     <i class="ph-bold ph-chart-bar"></i> View Class Results
                                 </button>
                             `;
-                    } else if (prog.score !== null) {
-                        quizContent = `
-                                <div class="bg-white rounded-xl p-4 border border-green-200 shadow-sm mb-4 flex items-center justify-between">
+                    } else {
+                        const canRetake = (app.state.data.settings['pref_allow_retake'] !== 'false');
+                        const score = (prog.score !== null) ? Number(prog.score) : null;
+                        const attempts = Number(prog.attempts || 0);
+
+                        if (score !== null) {
+                            const isPassing = score >= 80;
+                            const hasRetakeLeft = attempts < 2 && canRetake && !isPassing;
+
+                            quizContent = `
+                                <div class="bg-white rounded-xl p-4 border ${isPassing ? 'border-green-200 shadow-green-100' : 'border-amber-200 shadow-amber-100'} shadow-sm mb-4 flex items-center justify-between">
                                     <div>
-                                        <div class="text-xs font-bold text-green-600 uppercase tracking-wide">Latest Result</div>
+                                        <div class="text-xs font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'} uppercase tracking-wide">
+                                            ${isPassing ? 'Completed' : 'Latest Result'}
+                                        </div>
                                         <div class="font-bold text-slate-800 text-lg">${app.state.studentInfo ? app.state.studentInfo.name : 'You'}</div>
                                     </div>
                                     <div class="text-right">
-                                        <div class="text-2xl font-bold text-green-600">${prog.score}%</div>
+                                        <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%</div>
                                         <div class="text-[10px] text-slate-400 mt-1">${prog.timestamp ? new Date(prog.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                                     </div>
                                 </div>
                             `;
-                    } else if (!locked3) {
-                        quizContent = `
+
+                            if (hasRetakeLeft) {
+                                quizContent += `
+                                    <p class="text-xs text-amber-600 font-bold mb-4 flex items-center gap-2">
+                                        <i class="ph-bold ph-warning-circle"></i> You scored below 80%. One retake is available.
+                                    </p>
+                                    <button onclick="app.handlers.startQuiz('${m.id}')" class="w-full bg-amber-500 py-3 rounded-xl text-white font-bold shadow-lg shadow-amber-500/30 hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
+                                        <i class="ph-bold ph-arrow-counter-clockwise"></i> Try Again (Final Attempt)
+                                    </button>
+                                `;
+                            } else if (!isPassing && attempts >= 2) {
+                                quizContent += `
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Maximum Attempts Reached</p>
+                                    </div>
+                                `;
+                            } else if (!isPassing && !canRetake) {
+                                quizContent += `
+                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Retakes Disabled by Teacher</p>
+                                    </div>
+                                `;
+                            }
+                        } else if (!locked3) {
+                            quizContent = `
                                 <p class="text-sm text-slate-600 mb-4">Take the ${modType.toLowerCase()} to assess your learning. Immediate feedback provided.</p>
                                 <button onclick="app.handlers.startQuiz('${m.id}')" class="w-full bg-accent-500 py-3 rounded-xl text-white font-bold shadow-lg shadow-accent-500/30 hover:bg-accent-600 transition-all flex items-center justify-center gap-2">
                                     <i class="ph-bold ph-lightning"></i> Start ${modType}
                                 </button>
                             `;
+                        }
                     }
 
                     step3.innerHTML = `
@@ -2904,7 +3053,7 @@
                                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Description (Max 150 chars)</label>
                                     <textarea name="description" maxlength="150" rows="2" class="w-full p-3 rounded-xl bg-white border border-slate-200 focus:border-brand-500 focus:outline-none transition-colors resize-none"></textarea>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label>
                                         <input type="text" name="subject" list="subjectOptions" required placeholder="Select or type..." class="w-full p-3 rounded-xl bg-white border border-slate-200 focus:border-brand-500 focus:outline-none transition-colors">
@@ -2916,9 +3065,7 @@
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
                                             <select name="grade" class="w-full p-3 rounded-xl bg-white border border-slate-200">
-                                                <option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
-                                                <option value="First Year">First Year</option><option value="Second Year">Second Year</option><option value="Third Year">Third Year</option><option value="Fourth Year">Fourth Year</option><option value="Fifth Year">Fifth Year</option>
-                                                <option value="Summer Class">Summer Class</option><option value="Tutorial Session">Tutorial Session</option>
+                                                ${app.utils.getFilteredLevels().map(lvl => `<option value="${lvl}">${lvl}</option>`).join('')}
                                             </select>
                                         </div>
                                         <div>
@@ -2928,6 +3075,27 @@
                                             </select>
                                         </div>
                                     </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Target Classes/Sections (Optional)</label>
+                                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3 bg-white/50 border border-slate-200 rounded-xl shadow-inner max-h-[140px] overflow-y-auto">
+                                        <label class="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors group">
+                                            <input type="checkbox" name="assignedClassesOpt" value="All" checked 
+                                                class="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                                                onchange="const checks = this.closest('div').querySelectorAll('.class-opt-check'); if(this.checked) checks.forEach(c => c.checked = false)">
+                                            <span class="text-xs font-bold text-slate-600">ALL CLASSES</span>
+                                        </label>
+                                        ${app.utils.getUniqueSections().map(sec => `
+                                            <label class="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors group">
+                                                <input type="checkbox" name="assignedClassesOpt" value="${sec}" 
+                                                    class="class-opt-check w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                                                    onchange="if(this.checked) this.closest('div').querySelector('input[value=All]').checked = false">
+                                                <span class="text-xs text-slate-500 group-hover:text-slate-900">${sec}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
                                 </div>
 
                                 <!-- TERMINOLOGY TOGGLE -->
@@ -3032,6 +3200,21 @@
                             }
                             uidField.value = app.state.userId || '';
 
+                            // Process Assigned Classes
+                            const classChecks = form.querySelectorAll('input[name="assignedClassesOpt"]:checked');
+                            let classesArr = Array.from(classChecks).map(c => c.value);
+                            if (classesArr.length === 0 || classesArr.includes('All')) {
+                                classesArr = ['All'];
+                            }
+                            let cField = form.querySelector('input[name="assignedClasses"]');
+                            if (!cField) {
+                                cField = document.createElement('input');
+                                cField.type = 'hidden';
+                                cField.name = 'assignedClasses';
+                                form.appendChild(cField);
+                            }
+                            cField.value = classesArr.join(',');
+
                             // Safety timeout: 5 minutes
                             const uploadTimeout = setTimeout(() => {
                                 btn.disabled = false;
@@ -3066,39 +3249,17 @@
                     return wrap;
                 },
 
-                // TEACHER: CLASS MANAGEMENT VIEW
+                // TEACHER: CLASS/SECTION MANAGEMENT VIEW
                 classManagement() {
                     const wrap = document.createElement('div');
                     wrap.className = "p-6 fade-in max-w-lg mx-auto w-full pb-24";
 
                     wrap.innerHTML = `
-                            <h2 class="text-2xl font-display font-bold text-slate-800 mb-1">Class Management</h2>
+                            <h2 class="text-2xl font-display font-bold text-slate-800 mb-1">Class/Section Management</h2>
                             <p class="text-sm text-slate-500 mb-6">Manage class codes and monitor active students.</p>
 
-                            <!-- CLASS CODE SECTION -->
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
-                                <div class="flex items-center gap-3 mb-4">
-                                    <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
-                                        <i class="ph-bold ph-key text-xl"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-bold text-slate-800">Class Code</h3>
-                                        <p class="text-xs text-slate-500">Students need this code to register.</p>
-                                    </div>
-                                </div>
-                                <div class="bg-slate-50 rounded-xl p-4 flex items-center justify-between border border-slate-100 mb-4">
-                                    <span id="active-class-code" class="text-2xl font-mono font-black tracking-widest text-slate-800">------</span>
-                                    <button onclick="app.handlers.copyCode()" class="p-2 rounded-lg hover:bg-slate-200 text-slate-500" title="Copy Code">
-                                        <i class="ph-bold ph-copy text-lg"></i>
-                                    </button>
-                                </div>
-                                <button onclick="app.handlers.generateNewCode(this)" class="w-full bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all flex items-center justify-center gap-2">
-                                    <i class="ph-bold ph-arrows-clockwise"></i> Generate New Code
-                                </button>
-                            </div>
-
-                            <!-- ONLINE STUDENTS SECTION -->
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 relative">
+                            <!-- ONLINE STUDENTS SECTION (MOVE TO TOP) -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 relative mb-6">
                                 <div class="flex items-center justify-between mb-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
@@ -3116,6 +3277,74 @@
                                 <div id="online-students-list" class="space-y-1">
                                     <div class="text-slate-400 text-xs py-2 italic">Loading...</div>
                                 </div>
+                            </div>
+
+                            <!-- LEVEL VISIBILITY SETTINGS -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                                        <i class="ph-bold ph-funnel text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-slate-800">Level Visibility</h3>
+                                        <p class="text-xs text-slate-500">Enable/Disable academic levels shown in the app.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-3">
+                                    ${[
+                            { id: 'pref_show_hs', label: 'High School', sub: 'Grades 7 - 12' },
+                            { id: 'pref_show_college', label: 'College', sub: 'First - Fifth Year' },
+                            { id: 'pref_show_others', label: 'Others', sub: 'Summer, Tutorials' }
+                        ].map(opt => `
+                                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <div>
+                                                <div class="text-sm font-bold text-slate-800">${opt.label}</div>
+                                                <div class="text-[10px] text-slate-400 uppercase font-black tracking-widest">${opt.sub}</div>
+                                            </div>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" value="" class="sr-only peer" ${app.state.data.settings[opt.id] !== 'false' ? 'checked' : ''} 
+                                                    onchange="app.handlers.toggleLevelVisibility('${opt.id}', this.checked)">
+                                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+                                            </label>
+                                        </div>
+                                    `).join('')}
+
+                                    <!-- SECOND ATTEMPT TOGGLE -->
+                                    <div class="flex items-center justify-between p-3 bg-brand-50 rounded-xl border border-brand-100 mt-2">
+                                        <div>
+                                            <div class="text-sm font-bold text-brand-900">Allow Second Attempts</div>
+                                            <div class="text-[10px] text-brand-600 uppercase font-black tracking-widest">Enforce 80% Retake Condition</div>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" value="" class="sr-only peer" ${app.state.data.settings['pref_allow_retake'] !== 'false' ? 'checked' : ''} 
+                                                onchange="app.handlers.togglePreference('pref_allow_retake', this.checked)">
+                                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CLASS CODE SECTION (MOVE TO BOTTOM) -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
+                                        <i class="ph-bold ph-key text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-slate-800">Class/Section Code</h3>
+                                        <p class="text-xs text-slate-500">Students need this code to register.</p>
+                                    </div>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-4 flex items-center justify-between border border-slate-100 mb-4">
+                                    <span id="active-class-code" class="text-2xl font-mono font-black tracking-widest text-slate-800">------</span>
+                                    <button onclick="app.handlers.copyCode()" class="p-2 rounded-lg hover:bg-slate-200 text-slate-500" title="Copy Code">
+                                        <i class="ph-bold ph-copy text-lg"></i>
+                                    </button>
+                                </div>
+                                <button onclick="app.handlers.generateNewCode(this)" class="w-full bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/20 hover:bg-brand-700 transition-all flex items-center justify-center gap-2">
+                                    <i class="ph-bold ph-arrows-clockwise"></i> Generate New Code
+                                </button>
                             </div>
                         `;
 
@@ -3239,6 +3468,40 @@
                                 </form>
                             </div>
 
+                            <!-- EDIT ACADEMIC INFO -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="w-10 h-10 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center">
+                                        <i class="ph-bold ph-graduation-cap text-xl"></i>
+                                    </div>
+                                    <h3 class="font-bold text-slate-800">Academic Information</h3>
+                                </div>
+                                <form id="academicForm" class="space-y-3">
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Grade Level</label>
+                                            <select name="newGrade" required class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white transition-colors font-medium">
+                                                ${app.utils.getFilteredLevels().map(lvl => `<option value="${lvl}" ${info.grade === lvl ? 'selected' : ''}>${lvl}</option>`).join('')}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Class/Section</label>
+                                            <input type="text" name="newSection" value="${info.section || ''}" required placeholder="e.g. RUTHERFORD" 
+                                                oninput="this.value = this.value.toUpperCase().trim()"
+                                                class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors font-medium">
+                                        </div>
+                                    </div>
+                                    <div class="relative">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm with Password</label>
+                                        <input type="password" name="confirmPassword" required placeholder="Enter your password" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
+                                        <i class="ph-bold ph-lock-key absolute right-4 top-9 text-slate-400"></i>
+                                    </div>
+                                    <button type="submit" id="academicBtn" class="w-full bg-violet-600 text-white font-bold py-3 rounded-xl hover:bg-violet-700 transition-all">
+                                        Update Academic Info
+                                    </button>
+                                </form>
+                            </div>
+
 
                             <!-- CHANGE PASSWORD -->
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5">
@@ -3337,47 +3600,92 @@
                         // Username form handler
                         document.getElementById('usernameForm').onsubmit = (e) => {
                             e.preventDefault();
-                            const fd = new FormData(e.target);
-                            const btn = document.getElementById('usernameBtn');
-                            btn.disabled = true;
-                            btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
-                            
-                            const password = fd.get('confirmPassword');
-                            DataService.updateUsername(app.state.userId, fd.get('newUsername'), password, (res) => {
-                                btn.disabled = false;
-                                btn.innerHTML = 'Update Username';
-                                if (res.success) {
-                                    app.showToast("Username updated successfully!", "success");
-                                    app.state.studentInfo.username = fd.get('newUsername');
-                                    localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
-                                    e.target.reset(); // Clear password field
-                                } else {
-                                    app.showToast(res.error || "Failed to update username.", "error");
-                                }
-                            });
+                            try {
+                                const fd = new FormData(e.target);
+                                const btn = document.getElementById('usernameBtn');
+                                const originalHtml = btn.innerHTML;
+                                btn.disabled = true;
+                                btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
+
+                                const password = fd.get('confirmPassword');
+                                DataService.updateUsername(app.state.userId, fd.get('newUsername'), password, (res) => {
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalHtml;
+                                    if (res.success) {
+                                        app.showToast("Username updated successfully!", "success");
+                                        app.state.studentInfo.username = fd.get('newUsername');
+                                        localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
+                                        e.target.reset(); // Clear password field
+                                    } else {
+                                        app.showToast(res.error || "Failed to update username.", "error");
+                                    }
+                                });
+                            } catch (err) {
+                                console.error("[Profile] Form submit error:", err);
+                                app.showToast("Internal system error occurred.", "error");
+                            }
                         };
 
                         // Gender form handler
                         document.getElementById('genderForm').onsubmit = (e) => {
                             e.preventDefault();
-                            const fd = new FormData(e.target);
-                            const btn = document.getElementById('genderBtn');
-                            btn.disabled = true;
-                            btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
-                            
-                            const password = fd.get('confirmPassword');
-                            DataService.updateGender(app.state.userId, fd.get('newGender'), password, (res) => {
-                                btn.disabled = false;
-                                btn.innerHTML = 'Update Gender';
-                                if (res.success) {
-                                    app.showToast("Gender updated successfully!", "success");
-                                    app.state.studentInfo.gender = fd.get('newGender');
-                                    localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
-                                    e.target.reset(); // Clear password field
-                                } else {
-                                    app.showToast(res.error || "Failed to update gender.", "error");
-                                }
-                            });
+                            try {
+                                const fd = new FormData(e.target);
+                                const btn = document.getElementById('genderBtn');
+                                const originalHtml = btn.innerHTML;
+                                btn.disabled = true;
+                                btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
+
+                                const password = fd.get('confirmPassword');
+                                DataService.updateGender(app.state.userId, fd.get('newGender'), password, (res) => {
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalHtml;
+                                    if (res.success) {
+                                        app.showToast("Gender updated successfully!", "success");
+                                        app.state.studentInfo.gender = fd.get('newGender');
+                                        localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
+                                        e.target.reset(); // Clear password field
+                                    } else {
+                                        app.showToast(res.error || "Failed to update gender.", "error");
+                                    }
+                                });
+                            } catch (err) {
+                                console.error("[Profile] Form submit error:", err);
+                                app.showToast("Internal system error occurred.", "error");
+                            }
+                        };
+
+                        // Academic form handler
+                        document.getElementById('academicForm').onsubmit = (e) => {
+                            e.preventDefault();
+                            try {
+                                const fd = new FormData(e.target);
+                                const btn = document.getElementById('academicBtn');
+                                const originalHtml = btn.innerHTML;
+                                const grade = fd.get('newGrade');
+                                const section = fd.get('newSection');
+                                const password = fd.get('confirmPassword');
+
+                                btn.disabled = true;
+                                btn.innerHTML = '<div class="spinner w-5 h-5 border-2 inline-block align-middle mr-2"></div> Updating...';
+
+                                DataService.updateAcademicInfo(app.state.userId, grade, section, password, (res) => {
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalHtml;
+                                    if (res.success) {
+                                        app.showToast("Academic info updated successfully!", "success");
+                                        app.state.studentInfo.grade = grade;
+                                        app.state.studentInfo.section = section;
+                                        localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
+                                        app.onNavigate('profile'); // Refresh view
+                                    } else {
+                                        app.showToast(res.error || "Failed to update academic info.", "error");
+                                    }
+                                });
+                            } catch (err) {
+                                console.error("[Profile] Form submit error:", err);
+                                app.showToast("Internal system error occurred.", "error");
+                            }
                         };
 
 
@@ -3443,8 +3751,8 @@
                             // Name Fallback: If progress sheet has no name, look up in students list
                             let studentName = entry.name;
                             if (!studentName || studentName === 'Anonymous') {
-                                const s = app.state.data.students ? app.state.data.students.find(x => x.userId == userId) : null;
-                                if (s) studentName = s.name;
+                                const s = app.state.data.students ? app.state.data.students.find(x => x.userId == userId || x.id == userId) : null;
+                                if (s) studentName = s.name || (s.firstName + ' ' + (s.lastName || ''));
                             }
 
                             rows.push({
@@ -3874,8 +4182,8 @@
 
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
-                            <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-[scaleIn_0.3s_ease] max-h-[90vh]">
-                                <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                            <div class="bg-white dark:bg-slate-900 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-[scaleIn_0.3s_ease] max-h-[90vh] border dark:border-slate-800">
+                                <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
                                     <div>
                                         <h3 class="font-bold text-slate-800 text-lg">Edit Module</h3>
                                         <p class="text-xs text-slate-500 line-clamp-1">Modify module details and security settings</p>
@@ -3909,7 +4217,7 @@
                                                 <div>
                                                     <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Level</label>
                                                     <select name="grade" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
-                                                        ${['7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].map(g => `<option ${m.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
+                                                        ${app.utils.getFilteredLevels().map(g => `<option ${m.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
                                                     </select>
                                                 </div>
                                                 <div>
@@ -3917,6 +4225,26 @@
                                                     <select name="quarter" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
                                                         ${['Term 1', 'Term 2', 'Term 3', 'Term 4', 'Summer', 'Tutorials'].map(q => `<option ${m.quarter == q ? 'selected' : ''}>${q}</option>`).join('')}
                                                     </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="md:col-span-2">
+                                                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Target Classes/Sections (Optional)</label>
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-[140px] overflow-y-auto">
+                                                    <label class="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors group">
+                                                        <input type="checkbox" name="assignedClassesOpt" value="All" ${(m.assignedClasses || 'All').includes('All') ? 'checked' : ''} 
+                                                            class="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                                                            onchange="const checks = this.closest('div').querySelectorAll('.class-opt-check'); if(this.checked) checks.forEach(c => c.checked = false)">
+                                                        <span class="text-xs font-bold text-slate-600">ALL CLASSES</span>
+                                                    </label>
+                                                    ${app.utils.getUniqueSections().map(sec => `
+                                                        <label class="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors group">
+                                                            <input type="checkbox" name="assignedClassesOpt" value="${sec}" ${(m.assignedClasses || '').split(',').map(s => s.trim()).includes(sec) ? 'checked' : ''}
+                                                                class="class-opt-check w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                                                                onchange="if(this.checked) this.closest('div').querySelector('input[value=All]').checked = false">
+                                                            <span class="text-xs text-slate-500 group-hover:text-slate-900">${sec}</span>
+                                                        </label>
+                                                    `).join('')}
                                                 </div>
                                             </div>
                                         </div>
@@ -4005,14 +4333,14 @@
                                             </button>
                                         </div>
                                     </div>
+                                    
+                                    <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 rounded-b-2xl flex justify-between items-center shrink-0">
+                                        <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-5 py-2.5 text-slate-500 dark:text-slate-400 text-sm font-bold hover:text-slate-800 dark:hover:text-white transition-colors">Cancel</button>
+                                        <button type="submit" id="settings-save-btn" class="px-8 py-2.5 bg-brand-600 text-white shadow-lg shadow-brand-500/20 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-brand-700 transition-all flex items-center gap-2">
+                                            <i class="ph-bold ph-check"></i> Save Changes
+                                        </button>
+                                    </div>
                                 </form>
-                                
-                                <div class="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between items-center shrink-0">
-                                    <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="px-5 py-2.5 text-slate-500 text-sm font-bold hover:text-slate-800 transition-colors">Cancel</button>
-                                    <button id="settings-save-btn" class="px-8 py-2.5 bg-brand-600 text-white shadow-lg shadow-brand-500/20 rounded-xl text-sm font-black uppercase tracking-widest hover:bg-brand-700 transition-all flex items-center gap-2">
-                                        <i class="ph-bold ph-check"></i> Save Changes
-                                    </button>
-                                </div>
                             </div>
                         `;
                     modal.classList.remove('hidden');
@@ -4050,42 +4378,49 @@
                         });
                     };
 
-                    // SAVE HANDLER
-                    document.getElementById('settings-save-btn').onclick = function () {
+                        // SAVE HANDLER
                         const form = document.getElementById('editModuleForm');
-                        const pass = document.getElementById('teacher-pass-confirm').value;
+                        form.onsubmit = function (e) {
+                            e.preventDefault();
+                            try {
+                                const pass = document.getElementById('teacher-pass-confirm').value;
 
-                        if (!pass) {
-                            app.showToast("Please enter your password to save changes.", "error");
-                            document.getElementById('teacher-pass-confirm').focus();
-                            return;
-                        }
+                                if (!pass) {
+                                    app.showToast("Please enter your password to save changes.", "error");
+                                    document.getElementById('teacher-pass-confirm').focus();
+                                    return;
+                                }
 
-                        const btn = this;
-                        const originalHtml = btn.innerHTML;
-                        btn.disabled = true;
-                        btn.innerHTML = '<div class="spinner w-4 h-4 border-2"></div> Processing...';
+                                const btn = document.getElementById('settings-save-btn');
+                                const originalHtml = btn.innerHTML;
+                                btn.disabled = true;
+                                btn.innerHTML = '<div class="spinner w-4 h-4 border-2"></div> Processing...';
 
-                        DataService.updateModule(form, (res) => {
-                            if (res.success) {
-                                app.showToast("Module updated successfully!", "success");
-                                modal.classList.add('hidden');
-                                app.refreshData();
-                            } else {
-                                app.showToast(res.error || "Failed to update. Check password.", "error");
-                                btn.disabled = false;
-                                btn.innerHTML = originalHtml;
+                                // PASS THE ACTUAL FORM ELEMENT TO DATASERVICE
+                                DataService.updateModule(e.target, (res) => {
+                                    if (res.success) {
+                                        app.showToast("Module updated successfully!", "success");
+                                        modal.classList.add('hidden');
+                                        app.refreshData();
+                                    } else {
+                                        app.showToast(res.error || "Failed to update. Check password.", "error");
+                                        btn.disabled = false;
+                                        btn.innerHTML = originalHtml;
+                                    }
+                                });
+                            } catch (err) {
+                                console.error("[ModuleEdit] Fatal Error:", err);
+                                app.showToast("An unexpected error occurred during save.", "error");
                             }
-                        });
-                    };
+                        };
                 },
 
                 // TEACHER: SHOW MONITORING REPORT
                 showMonitoringReport(userId, modId) {
                     const modal = document.getElementById('modal-overlay');
                     modal.innerHTML = `
-                            <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease]">
-                                <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+                            <div class="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease] border dark:border-slate-800">
+                                <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
                                     <div class="flex items-center gap-3">
                                         <button onclick="app.components.showModuleScores('${modId}')" class="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-500">
                                             <i class="ph-bold ph-arrow-left"></i>
@@ -4114,7 +4449,13 @@
                         .then(res => {
                             if (res && res.success) {
                                 document.getElementById('monitor-student-name').textContent = `${res.studentName} • ${modId}`;
-                                const logs = JSON.parse(res.monitoringData || '[]');
+                                let logs = [];
+                                try {
+                                    logs = JSON.parse(res.monitoringData || '[]');
+                                } catch (e) {
+                                    console.error("JSON Parse Error in Monitoring Data:", e);
+                                    logs = [];
+                                }
                                 const content = document.getElementById('monitoring-content');
 
                                 if (logs.length === 0) {
@@ -4384,7 +4725,7 @@
                                         <h2 class="text-2xl font-black text-slate-900 leading-tight">${name}</h2>
                                         <div class="flex items-center justify-center sm:justify-start gap-2 mt-1 mb-2">
                                             <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${p.username || 'No Username'}</span>
-                                            <span class="text-xs font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded">${p.grade}-${p.section}</span>
+                                            <span class="text-xs font-bold bg-brand-50 text-brand-700 px-2 py-0.5 rounded">${p.grade} • ${p.section}</span>
                                         </div>
                                         <p class="text-xs text-slate-500"><i class="ph-bold ph-calendar-blank mr-1"></i>Joined ${regDateStr}</p>
                                     </div>
@@ -4581,6 +4922,42 @@
                     app.showToast(`Theme switched to ${isDark ? 'Dark' : 'Light'} Mode`, "info");
                 },
 
+                async toggleLevelVisibility(key, isEnabled) {
+                    app.state.data.settings[key] = isEnabled.toString();
+                    app.showToast(`${isEnabled ? 'Enabled' : 'Disabled'} Level Visibility`, "info");
+
+                    // Device Persistence: Immediate sync to localStorage
+                    localStorage.setItem('lumina_data_cache', JSON.stringify(app.state.data));
+
+                    try {
+                        const res = await BackEndService.call('updateSetting', [key, isEnabled.toString(), app.state.userId]);
+                        if (!res || !res.success) {
+                            app.showToast("Failed to save setting to cloud.", "error");
+                        }
+                    } catch (e) {
+                        console.error("Error saving setting:", e);
+                        app.showToast("Connection error while saving settings.", "error");
+                    }
+                },
+
+                async togglePreference(key, isEnabled) {
+                    app.state.data.settings[key] = isEnabled.toString();
+                    app.showToast(`${isEnabled ? 'Enabled' : 'Disabled'} retake permission`, "info");
+
+                    // Device Persistence: Immediate sync to localStorage
+                    localStorage.setItem('lumina_data_cache', JSON.stringify(app.state.data));
+
+                    try {
+                        const res = await BackEndService.call('updateSetting', [key, isEnabled.toString(), app.state.userId]);
+                        if (!res || !res.success) {
+                            app.showToast("Failed to save preference.", "error");
+                        }
+                    } catch (e) {
+                        console.error("Error saving preference:", e);
+                        app.showToast("Connection error.", "error");
+                    }
+                },
+
                 requestLogout() {
                     app.showModal(`
                         <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-6 transform animate-in fade-in zoom-in duration-200">
@@ -4608,7 +4985,7 @@
 
                 logout() {
                     app.showToast("Signing out...", "info");
-                    
+
                     // Backend logout notification
                     if (app.state.userMode === 'student' && app.state.userId) {
                         DataService.logout(app.state.userId, () => { });
@@ -4620,7 +4997,7 @@
                     localStorage.removeItem('lumina_userMode');
                     localStorage.removeItem('lumina_data_cache');
                     localStorage.removeItem('lumina_cache_time');
-                    
+
                     // Reset application state
                     app.state.userId = null;
                     app.state.studentInfo = null;
@@ -4633,7 +5010,7 @@
                     // Cleanup UI
                     const modeToggleBtn = document.getElementById('modeToggleBtn');
                     if (modeToggleBtn) modeToggleBtn.classList.add('hidden');
-                    
+
                     app.closeModal();
                     app.render();
                 },
@@ -4978,9 +5355,25 @@
                             }
 
                             const photoVal = details.activityPhoto || 'submitted_offline';
-                            DataService.submitProgress(modId, step, photoVal, details, null, () => {
+                            
+                            // OPTIMIZE: Strip the redundant photo data from details object to halve the payload size
+                            const cleanDetails = { ...details };
+                            delete cleanDetails.activityPhoto;
+
+                            DataService.submitProgress(modId, step, photoVal, cleanDetails, null, (res) => {
+                                if (res && res.success === false) {
+                                    // RESCUE SUBMIT STATE
+                                    if (modalBtn) {
+                                        modalBtn.disabled = false;
+                                        modalBtn.innerHTML = ogModalBtnText;
+                                    }
+                                    app.showToast("Failed to submit activity: " + (res.error || "Connection failure."), "error");
+                                    return;
+                                }
+
                                 app.refreshData();
                                 app.showToast('Activity Submitted!', 'success');
+                                document.getElementById('modal-overlay').classList.add('hidden');
                                 if (typeof callback === 'function') callback();
                             });
                         }, null); // Third param null for cancel
@@ -5700,7 +6093,7 @@
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
                                             <select name="grade" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                                ${['7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].map(g => `<option ${info.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
+                                                ${app.utils.getFilteredLevels().map(g => `<option ${info.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
                                             </select>
                                         </div>
                                         <div>
@@ -5731,8 +6124,19 @@
                         const newInfo = {
                             name: fd.get('name'),
                             grade: fd.get('grade'),
-                            section: fd.get('section')
+                            section: fd.get('section').toString().toUpperCase().trim()
                         };
+
+                        // IMMEDIATE ATTEMPT INCREMENT (Airtight)
+                        BackEndService.call('incrementAttempt', [app.state.userId, modId]);
+
+                        // Update local state attempts to prevent double-click or reload bypass
+                        if (!app.state.data.progress[app.state.userId]) app.state.data.progress[app.state.userId] = {};
+                        if (!app.state.data.progress[app.state.userId][modId]) {
+                            app.state.data.progress[app.state.userId][modId] = { score: null, attempts: 1 };
+                        } else {
+                            app.state.data.progress[app.state.userId][modId].attempts = (Number(app.state.data.progress[app.state.userId][modId].attempts) || 0) + 1;
+                        }
 
                         if (!app.state.studentInfo) {
                             app.state.studentInfo = newInfo;
@@ -5981,7 +6385,7 @@
                                         <div>
                                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
                                             <select name="grade" class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none transition-colors">
-                                                ${['7', '8', '9', '10', '11', '12', 'First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year', 'Summer Class', 'Tutorial Session'].map(g => `<option ${info.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
+                                                ${app.utils.getFilteredLevels().map(g => `<option ${info.grade == g ? 'selected' : ''}>${g}</option>`).join('')}
                                             </select>
                                         </div>
                                         <div>
@@ -6006,7 +6410,7 @@
                                     
                                     <div class="flex gap-3 pt-4 border-t border-slate-100 mt-6">
                                         <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="flex-1 bg-slate-100 text-slate-700 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-colors">Cancel</button>
-                                        <button type="submit" id="student-details-submit-btn" class="flex-1 bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all flex justify-center items-center">
+                                        <button type="button" id="student-details-submit-btn" class="flex-1 bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all flex justify-center items-center">
                                             Submit <i class="ph-bold ph-paper-plane-right ml-2"></i>
                                         </button>
                                     </div>
@@ -6018,6 +6422,8 @@
                     const photoInput = document.getElementById('activityPhotoInput');
                     const photoPreviewContainer = document.getElementById('photoPreviewContainer');
                     const photoUploadUI = document.getElementById('photoUploadUI');
+                    const submitBtn = document.getElementById('student-details-submit-btn');
+                    const form = document.getElementById('studentDetailsForm');
                     let compressedImageBase64Array = [];
 
                     photoInput.addEventListener('change', async (e) => {
@@ -6036,7 +6442,9 @@
                             return;
                         }
 
-                        photoUploadUI.innerHTML = '<div class="spinner w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><span class="text-xs font-bold text-slate-500 block text-center">Optimizing Images...</span>';
+                        // DISABLE SUBMIT WHILE OPTIMIZING
+                        submitBtn.disabled = true;
+                        photoUploadUI.innerHTML = '<div class="spinner w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><span class="text-xs font-bold text-slate-500 block text-center">Optimizing...</span>';
 
                         compressedImageBase64Array = [];
                         photoPreviewContainer.innerHTML = '';
@@ -6084,6 +6492,7 @@
                         }
 
                         photoUploadUI.classList.add('hidden');
+                        submitBtn.disabled = false;
 
                         // Restore UI text inside upload div (though it is transparent behind the standard input)
                         photoUploadUI.innerHTML = `
@@ -6093,14 +6502,14 @@
                             `;
                     });
 
-                    document.getElementById('studentDetailsForm').onsubmit = (e) => {
-                        e.preventDefault();
+                    // USE DIRECT CLICK INSTEAD OF ONSUBMIT FOR RELIABILITY
+                    submitBtn.onclick = () => {
+                        if (!form.reportValidity()) return;
 
-                        const btn = document.getElementById('submitActivityBtn');
-                        btn.disabled = true;
-                        btn.innerHTML = '<div class="spinner w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<div class="spinner w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
 
-                        const fd = new FormData(e.target);
+                        const fd = new FormData(form);
 
                         let photoData = null;
                         if (compressedImageBase64Array.length > 0) {
@@ -6123,7 +6532,6 @@
                             app.state.studentInfo = { ...app.state.studentInfo, name: newInfo.name, grade: newInfo.grade, section: newInfo.section, group: newInfo.group };
                         }
 
-                        // modal.classList.add('hidden'); // HANDLED BY markComplete BACKEND CALLBACK
                         if (onConfirm) onConfirm(newInfo);
                     };
                 },
@@ -6176,10 +6584,10 @@
 
                     const renderQ = () => {
                         if (currentQ >= quizData.length) {
-                             // Handle empty quiz case to prevent NaN
-                             const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
-                             const pointsStr = score + '/' + quizData.length;
-                             const analysisStr = JSON.stringify(app.state.currentQuizResults);
+                            // Handle empty quiz case to prevent NaN
+                            const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
+                            const pointsStr = score + '/' + quizData.length;
+                            const analysisStr = JSON.stringify(app.state.currentQuizResults);
 
                             // Show Processing UI immediately
                             modal.innerHTML = `
@@ -6192,29 +6600,59 @@
 
                             // Stop Monitoring and wait for sync, then save score
                             MonitorService.stop().finally(() => {
-                                DataService.submitProgress(modId, 'score', finalScore, app.state.studentInfo, pointsStr, analysisStr, () => {
-                                    app.refreshData();
+                                const sendData = () => {
+                                    DataService.submitProgress(modId, 'score', finalScore, app.state.studentInfo, pointsStr, analysisStr, (res) => {
+                                        if (res && res.success === false) {
+                                            // SYNC FAILURE RECOVERY
+                                            modal.innerHTML = `
+                                                    <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center animate-[scaleIn_0.3s_ease]">
+                                                        <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                                            <i class="ph-bold ph-warning-circle"></i>
+                                                        </div>
+                                                        <h3 class="text-xl font-bold text-slate-800">Connection Failed</h3>
+                                                        <p class="text-slate-500 mb-6 text-sm">Your score was ${finalScore}% but we couldn't sync it to the cloud. Please try again.</p>
+                                                        <button id="retry-sync-btn" class="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition-all mb-3 flex items-center justify-center gap-2">
+                                                            <i class="ph-bold ph-arrow-counter-clockwise"></i> Retry Sync
+                                                        </button>
+                                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Do not close this window</p>
+                                                    </div>
+                                                `;
+                                            document.getElementById('retry-sync-btn').onclick = () => {
+                                                modal.innerHTML = `
+                                                        <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center animate-[scaleIn_0.3s_ease]">
+                                                            <div class="spinner w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                                            <h3 class="text-xl font-bold text-slate-800">Retrying Sync...</h3>
+                                                        </div>
+                                                    `;
+                                                sendData();
+                                            };
+                                            return;
+                                        }
 
-                                    // Hidden second chance retry button for scores < 80
-                                    let retryBtn = '';
-                                    if (finalScore < 80) {
-                                        retryBtn = `<button onclick="app.handlers.startQuiz('${modId}')" class="w-full bg-transparent text-slate-300 py-2 rounded-xl font-bold hover:bg-slate-50 hover:text-slate-500 transition-all mb-2 border border-transparent hover:border-slate-200">Retry Question Pack</button>`;
-                                    }
+                                        app.refreshData();
 
-                                    modal.innerHTML = `
-                                            <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center animate-[scaleIn_0.3s_ease]">
-                                                <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-                                                    <i class="ph-bold ph-trophy"></i>
+                                        // Hidden second chance retry button for scores < 80
+                                        let retryBtn = '';
+                                        if (finalScore < 80) {
+                                            retryBtn = `<button onclick="app.handlers.startQuiz('${modId}')" class="w-full bg-transparent text-slate-300 py-2 rounded-xl font-bold hover:bg-slate-50 hover:text-slate-500 transition-all mb-2 border border-transparent hover:border-slate-200">Retry Question Pack</button>`;
+                                        }
+
+                                        modal.innerHTML = `
+                                                <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center animate-[scaleIn_0.3s_ease]">
+                                                    <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                                        <i class="ph-bold ph-trophy"></i>
+                                                    </div>
+                                                    <h3 class="text-xl font-bold text-slate-800">${modType} Complete!</h3>
+                                                    <p class="text-slate-500 mb-6">You scored <span class="text-green-600 font-bold text-lg">${finalScore}%</span></p>
+                                                    ${retryBtn}
+                                                    <button onclick="document.getElementById('modal-overlay').classList.add('hidden'); app.render(); fireConfetti();" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">
+                                                        See Leaderboard
+                                                    </button>
                                                 </div>
-                                                <h3 class="text-xl font-bold text-slate-800">${modType} Complete!</h3>
-                                                <p class="text-slate-500 mb-6">You scored <span class="text-green-600 font-bold text-lg">${finalScore}%</span></p>
-                                                ${retryBtn}
-                                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden'); app.render(); fireConfetti();" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">
-                                                    See Leaderboard
-                                                </button>
-                                            </div>
-                                        `;
-                                });
+                                            `;
+                                    });
+                                };
+                                sendData();
                             });
                             return;
                         }
