@@ -1,4 +1,5 @@
 <!--
+    v3.9.6 - 2026-04-06 07:35 AM: [FIX] Resolved redundant score display in student mode and fixed a race condition in teacher grading to ensure immediate UI feedback.
     v3.9.5 - 2026-04-05 06:05 PM: [FIX] Account Recovery persistence: pre-populated secret question/answer and updated local state after saving.
     v3.9.4 - 2026-04-05 05:35 PM: [FEATURE] Consolidated student profile editing (Username, Gender, Grade, Section) into a single, unified form with one-time password confirmation.
     v3.9.3 - 2026-04-05 05:24 PM: [FEATURE] Updated logout toast message to a warm goodbye greeting.
@@ -11,7 +12,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v3.9.5</title>
+    <title>Lumina v3.9.6</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1712,22 +1713,26 @@
                 });
             },
 
-            refreshData(callback) {
-                DataService.load((data) => {
-                    if (data) {
-                        this.state.data = data;
-                        if (callback) callback();
-                        else this.render();
-                    } else {
-                        console.error("Critical: Received null data from backend. Retaining previous state.");
-                        // Attempt to recover or notify user if state is empty
-                        if (!this.state.data) {
-                            document.getElementById('loading-overlay').innerHTML = `<div class="text-red-500 text-center p-4"><h3 class="font-bold">Data Error</h3><p>Could not load application data.</p><button onclick="location.reload()" class="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Reload</button></div>`;
-                            document.getElementById('loading-overlay').classList.remove('hidden');
+            async refreshData(callback) {
+                return new Promise((resolve) => {
+                    DataService.load((data) => {
+                        if (data) {
+                            this.state.data = data;
+                            if (callback) callback();
+                            else this.render();
+                            resolve(data);
                         } else {
-                            if (callback) callback(); // Proceed with old data?
+                            console.error("Critical: Received null data from backend. Retaining previous state.");
+                            // Attempt to recover or notify user if state is empty
+                            if (!this.state.data) {
+                                document.getElementById('loading-overlay').innerHTML = `<div class="text-red-500 text-center p-4"><h3 class="font-bold">Data Error</h3><p>Could not load application data.</p><button onclick="location.reload()" class="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Reload</button></div>`;
+                                document.getElementById('loading-overlay').classList.remove('hidden');
+                            } else {
+                                if (callback) callback(); // Proceed with old data?
+                            }
+                            resolve(null);
                         }
-                    }
+                    });
                 });
             },
 
@@ -2676,7 +2681,7 @@
                         }
 
                         let badgeColor = isComplete ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600';
-                        let badgeText = isComplete ? `Score: ${prog.score}%` : 'In Progress';
+                        let badgeText = isComplete ? `${prog.score}%` : 'In Progress';
                         if (!prog.content && !prog.app) { badgeText = 'Not Started'; }
 
                         // Status Indicators for Teachers or Students
@@ -2713,7 +2718,7 @@
                                         <span class="px-2 py-1 ${gc.bg} ${gc.text} text-[10px] font-bold uppercase tracking-wider rounded-md shrink-0 border border-white/50 shadow-sm">${isNaN(m.grade) ? m.grade : 'Grade ' + m.grade}</span>
                                         <span class="px-2 py-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider rounded-md truncate max-w-full" title="${m.subject}">${m.subject}</span>
                                     </div>
-                                    <span class="px-2 py-1 ${badgeColor} text-[10px] font-bold rounded-full shrink-0">${Math.round(prog.score || 0)}% ${badgeText}</span>
+                                    <span class="px-2 py-1 ${badgeColor} text-[10px] font-bold rounded-full shrink-0">${badgeText}</span>
                                 </div>
                                 <h3 class="font-display font-bold text-lg text-slate-900 leading-tight mb-1">${m.title}</h3>
                                 <p class="text-xs text-slate-500 line-clamp-2 ${timerHtml ? 'mb-2' : 'mb-4'}">${m.desc}</p>
@@ -4039,7 +4044,7 @@
                     modal.classList.remove('hidden');
                 },
 
-                showActivitySubmissions(modId) {
+                showActivitySubmissions(modId, restoreScroll = 0) {
                     const m = app.state.data.modules.find(mod => mod.id === modId);
                     const allProg = app.state.data.progress || {};
 
@@ -4056,12 +4061,17 @@
                                 grade: entry.grade || '-',
                                 section: entry.section || '-',
                                 group: entry.group || '', // Include Group
-                                status: entry.app === true || entry.app === 'completed' || entry.app === 'true' || entry.app === 'submitted_offline' || entry.appGrade !== null ? 'Completed' : 'Pending',
+                                // Status is 'Completed' only if a grade is assigned or it's a non-gradable submission state
+                                status: (entry.appGrade !== null && entry.appGrade !== undefined && entry.appGrade !== '') || (entry.app === true || entry.app === 'true' || entry.app === 'completed') ? 'Completed' : 'Pending',
                                 photo: (typeof entry.app === 'string' && (entry.app.startsWith('data:image') || entry.app.startsWith('['))) ? entry.app : null,
                                 date: entry.timestamp || 0
                             };
 
-                            if (entry.app === 'pending' || (typeof entry.app === 'string' && (entry.app.startsWith('data:image') || entry.app.startsWith('[')) && entry.appGrade === null) || (entry.app === 'submitted_offline' && entry.appGrade === null)) {
+                            // Entry goes to PENDING only if it hasn't been graded yet (appGrade is null)
+                            const isGraded = entry.appGrade !== null && entry.appGrade !== undefined && entry.appGrade !== '';
+                            const isPendingReview = !isGraded && (entry.app === 'pending' || entry.app === 'submitted_offline' || (typeof entry.app === 'string' && (entry.app.startsWith('data:image') || entry.app.startsWith('['))));
+
+                            if (isPendingReview) {
                                 pendingRows.push(row);
                             } else {
                                 historyRows.push(row);
@@ -4086,7 +4096,7 @@
                                     </button>
                                 </div>
                                 
-                                <div class="overflow-y-auto p-0">
+                                <div id="submissions-list-container" class="overflow-y-auto p-0 scroll-smooth">
                                     ${pendingRows.length === 0 && historyRows.length === 0 ?
                             `<div class="text-center text-slate-400 py-10">
                                             <i class="ph ph-placeholder text-4xl mb-2"></i>
@@ -4151,6 +4161,14 @@
                         }
                             </div>
                         `;
+                    
+                    // Restore Scroll Position
+                    if (restoreScroll > 0) {
+                        setTimeout(() => {
+                            const container = document.getElementById('submissions-list-container');
+                            if (container) container.scrollTop = restoreScroll;
+                        }, 50);
+                    }
                     modal.classList.remove('hidden');
                 },
 
@@ -5459,13 +5477,12 @@
                         }
 
                         // Instructor sets the appGrade column independently
+                        const currentScroll = document.getElementById('submissions-list-container')?.scrollTop || 0;
                         BackEndService.call('saveProgress', [userId, modId, 'appGrade', score])
-                            .then(() => {
+                            .then(async () => {
                                 app.showToast('Submission Graded', 'success');
-                                app.refreshData(); // Refresh UI
-                                setTimeout(() => {
-                                    app.components.showActivitySubmissions(modId);
-                                }, 1500); // Wait for data refresh
+                                await app.refreshData(); // Wait for data sync to complete
+                                app.components.showActivitySubmissions(modId, currentScroll); // Re-open with new data immediately
                             })
                             .catch(err => {
                                 if (btn && btn.nodeType === 1) {
