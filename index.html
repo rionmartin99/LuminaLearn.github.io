@@ -1,10 +1,16 @@
 <!--
-    v3.9.6 - 2026-04-06 07:35 AM: [FIX] Resolved redundant score display in student mode and fixed a race condition in teacher grading to ensure immediate UI feedback.
-    v3.9.5 - 2026-04-05 06:05 PM: [FIX] Account Recovery persistence: pre-populated secret question/answer and updated local state after saving.
-    v3.9.4 - 2026-04-05 05:35 PM: [FEATURE] Consolidated student profile editing (Username, Gender, Grade, Section) into a single, unified form with one-time password confirmation.
-    v3.9.3 - 2026-04-05 05:24 PM: [FEATURE] Updated logout toast message to a warm goodbye greeting.
-    v3.9.2 - 2026-04-05 05:16 PM: [FEATURE] Enhanced login flow: delayed "Welcome back" toast until dashboard data is fully loaded; added background synchronization indicator.
-    v3.9.1 - 2026-04-05 05:07 PM: [FEATURE] Graceful async deletion: immediate dashboard redirect, visual "deleting" state for the module card, and automatic removal upon success.
+    v4.6.0 - 2026-04-07 10:55 PM: [CRITICAL] Class Results Restored. 'View Class Results' now shows BOTH online and offline students. Integrated hardened score aggregation logic to eliminate 0% discrepancies for offline students. Removed 'Real-time ONLY' filtering from Results modal.
+    v4.5.0 - 2026-04-07 07:35 PM: [FEATURE] Upload Module now includes Step 4 to Enable/Disable module on post (default: disabled). [FIX] Eliminated 'null%' from Leaderboards by defaulting to 0%.
+    v4.4.2 - 2026-04-07 07:15 PM: [FIX] Eliminated 'null%' scores in results. [ENHANCEMENT] Precision Monitoring: Tagged Copy/Paste as 'CRITICAL' alerts. Replaced 'DATA' label with 'SECURE/ACTIVITY/HIGH RISK' based on alert severity. Enhanced Monitoring Report with critical highlights.
+    v4.4.1 - 2026-04-07 07:05 PM: [FIX] Simplified quiz rules UI for better mobile/screen fit. Fixed 'Start Quiz' button wiring issue. Added periodic heartbeat to MonitorService to ensure students appear in 'Class Activity' monitor.
+    v4.4.0 - 2026-04-07 06:40 PM: [FEATURE] Introduced 'Time Banking' mechanics; quiz now uses a Global Time Pool where saved time from quick answers can be used for backtracking and review. Redesigned Rules screen.
+    v4.3.1 - 2026-04-07 06:30 PM: [FEATURE] Implemented 'Sticky Timers' for backtracking; remaining time per question is now saved and never resets when navigating between questions. Added 'Time Expired' lock state.
+    v4.3.0 - 2026-04-07 06:15 PM: [FEATURE] Overhauled quiz system with backtracking (Prev/Next buttons) and selection-confirmation mode to prevent accidental submissions. Added class-wide Top 5 leaderboard. Fixed 'NaN' score corruption.
+    v4.2.2 - 2026-04-07 03:16 PM: [FIX] Strictly filtered Class Activity to only show currently online (LIVE) students for real-time monitoring.
+    v4.2.1 - 2026-04-07 03:08 PM: [FIX] Removed hardcoded API_URL fallback to prevent content mirroring when sharing the standalone HTML file.
+    v4.2.0 - 2026-04-07 12:36 PM: [FEATURE] Refactored quiz timer to use a single constant (QUIZ_DURATION) for easier updates; increased default time to 60s.
+    v4.1.0 - 2026-04-07 11:42 AM: [FIX] Restored Class Results modal by implementing strict ID sanitization (trimming) and returning the full student roster to the teacher state.
+    v4.0.9 - 2026-04-07 11:27 AM: [FEATURE] Removed "Exit Quiz" button to prevent premature assessment termination and maintain test integrity.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -12,7 +18,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v3.9.6</title>
+    <title>Lumina v4.2.2</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -705,7 +711,13 @@
 
                     // 1s delay allows camera hardware to expose/focus correctly (from MonitoringLumina.html)
                     setTimeout(() => this.takeSnapshot(), 1000);
-                    this.state.interval = setInterval(() => this.takeSnapshot(), 60000);
+                    this.state.interval = setInterval(() => {
+                        this.takeSnapshot();
+                        // Heartbeat to Class Activity (isLive status)
+                        if (typeof app.handlers.pingOnline === 'function') {
+                            app.handlers.pingOnline();
+                        }
+                    }, 60000);
                 } catch (e) {
                     const err = CameraService.handleError(e);
                     this.log('Alert', 'Camera Connection Failed', err.title);
@@ -754,13 +766,13 @@
                     },
                     copy: () => {
                         const text = window.getSelection().toString();
-                        const preview = text.length > 150 ? text.substring(0, 150) + '...' : text;
-                        this.log('Alert', 'Copy Attempted', preview ? `"${preview}"` : 'To Clipboard');
+                        const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+                        this.log('Alert', 'CRITICAL: Copy Attempted', preview ? `Content: "${preview}"` : 'To Clipboard', true);
                     },
                     paste: (e) => {
                         let content = (e.clipboardData || window.clipboardData).getData('text');
-                        let preview = content.length > 150 ? content.substring(0, 150) + '...' : content;
-                        this.log('Alert', 'Paste Attempted', `"${preview}"`);
+                        let preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
+                        this.log('Alert', 'CRITICAL: Paste Attempted', `Content: "${preview}"`, true);
                     },
                     keydown: (e) => {
                         // Only capture printable characters and space
@@ -793,7 +805,7 @@
                 document.removeEventListener('keydown', this._handlers.keydown);
             },
 
-            log(type, message, detail = '') {
+            log(type, message, detail = '', isCritical = false) {
                 // Rolling Buffer for Snapshots: Keep only the last 5 images to save space
                 if (type === 'Snapshot') {
                     const snapCount = this.state.logs.filter(l => l.type === 'Snapshot').length;
@@ -807,12 +819,15 @@
                     t: new Date().toLocaleTimeString(),
                     type,
                     msg: message,
-                    det: detail
+                    det: detail,
+                    crit: isCritical
                 };
                 this.state.logs.push(entry);
 
                 // Increment stats
                 if (type === 'Alert') this.state.stats.alerts++;
+                if (isCritical) this.state.stats.alerts += 3; // Criticals count more towards risk
+                
                 if (type === 'State') this.state.stats.tabSwitches++;
                 if (type === 'Clipboard') this.state.stats.clipboard++;
                 if (type === 'Snapshot') this.state.stats.snapshots++;
@@ -820,8 +835,10 @@
                 console.log(`[Monitor] ${type}: ${message} ${detail}`);
 
                 // Sync every 3 events or immediately for serious ones (Alerts, System)
-                if (this.state.logs.length % 3 === 0 || type === 'Alert' || type === 'System') {
+                if (this.state.logs.length % 3 === 0 || type === 'Alert' || type === 'System' || isCritical) {
                     this.sync();
+                    // Task: Real-time notification trigger. Ensure ping follows sync for immediate teacher dashboard update.
+                    if (type === 'Alert' || isCritical) app.handlers.pingOnline();
                 }
             },
 
@@ -1082,6 +1099,7 @@
                         quarter: fd.get('quarter') || 'Term 1',
                         modType: fd.get('modType') || 'Quiz',
                         expiration: fd.get('expiration') || '',
+                        isActive: fd.get('isActive') === 'on' || fd.get('isActive') === true,
                         youtubeUrl: ''
                     };
 
@@ -2779,9 +2797,14 @@
                                     </div>
                                 </div>
                                 ${showTeacherUI ? `
-                                    <button onclick="app.components.showSettingsModal('${m.id}')" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                        <i class="ph-bold ph-gear" title="Module Settings"></i>
-                                    </button>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="app.components.showModuleClassActivity('${m.id}')" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-50 text-brand-600 text-[11px] font-bold hover:bg-brand-100 transition-all">
+                                            <i class="ph-bold ph-presentation-chart"></i> Class Activity
+                                        </button>
+                                        <button onclick="app.components.showSettingsModal('${m.id}')" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                            <i class="ph-bold ph-gear" title="Module Settings"></i>
+                                        </button>
+                                    </div>
                                 ` : ''}
                             </div>
                         `;
@@ -2971,24 +2994,30 @@
                         }
                     });
                     leaderboard.sort((a, b) => b.score - a.score);
-                    const top3 = leaderboard.slice(0, 3);
+                    const top5 = leaderboard.slice(0, 5);
 
                     // 2. Leaderboard HTML
                     let leaderboardHtml = '';
-                    if (top3.length > 0) {
+                    if (top5.length > 0) {
                         leaderboardHtml = `
                                 <div class="mt-6">
                                     <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Top Performers</h4>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        ${top3.map((p, idx) => {
-                            const medals = ['🥇', '🥈', '🥉'];
-                            const colors = ['bg-yellow-100 text-yellow-700 border-yellow-200', 'bg-slate-100 text-slate-700 border-slate-200', 'bg-orange-100 text-orange-800 border-orange-200'];
+                                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                        ${top5.map((p, idx) => {
+                            const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+                            const colors = [
+                                'bg-yellow-100 text-yellow-700 border-yellow-200', 
+                                'bg-slate-100 text-slate-700 border-slate-200', 
+                                'bg-orange-100 text-orange-800 border-orange-200',
+                                'bg-brand-50 text-brand-700 border-brand-100',
+                                'bg-brand-50 text-brand-700 border-brand-100'
+                            ];
                             return `
                                                 <div class="flex flex-col items-center p-2 rounded-xl border ${colors[idx] || 'bg-white border-slate-100'}">
-                                                    <div class="text-2xl mb-1">${medals[idx] || ''}</div>
-                                                    <div class="text-[10px] font-bold uppercase tracking-wider opacity-70">Rank ${idx + 1}</div>
-                                                    <div class="font-bold text-sm truncate w-full text-center">${p.name}</div>
-                                                    <div class="text-xs font-mono font-bold mt-1">${p.score}%</div>
+                                                    <div class="text-xl mb-1">${medals[idx] || ''}</div>
+                                                    <div class="text-[9px] font-bold uppercase tracking-wider opacity-60">Rank ${idx + 1}</div>
+                                                    <div class="font-bold text-[11px] truncate w-full text-center">${p.name}</div>
+                                                    <div class="text-[11px] font-mono font-bold mt-1">${(p.score || 0)}%</div>
                                                 </div>
                                             `;
                         }).join('')}
@@ -3009,7 +3038,7 @@
                             `;
                     } else {
                         const canRetake = (app.state.data.settings['pref_allow_retake'] !== 'false');
-                        const score = (prog.score !== null) ? Number(prog.score) : null;
+                        const score = (prog.score !== null && prog.score !== "" && !isNaN(prog.score)) ? Number(prog.score) : null;
                         const attempts = Number(prog.attempts || 0);
 
                         if (score !== null) {
@@ -3203,6 +3232,20 @@
                                     <input type="file" name="quizFile" accept=".csv" class="w-full p-2 rounded-xl bg-white border border-slate-200 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent-50 file:text-accent-700 hover:file:bg-accent-100">
                                 </div>
 
+                                <div class="border-t border-slate-100 pt-2 mt-2"></div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-3">4. Enable Module</label>
+                                    <label class="relative inline-flex items-center cursor-pointer group">
+                                        <input type="checkbox" name="isActive" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+                                        <span class="ml-3 text-xs font-bold text-slate-500 peer-checked:text-brand-600 transition-colors">Visible to Students</span>
+                                    </label>
+                                    <p class="text-[10px] text-slate-400 mt-2 italic flex items-center gap-1">
+                                        <i class="ph ph-info"></i> If disabled, the module will be hidden from everyone except the teacher.
+                                    </p>
+                                </div>
+
                                 <!-- Upload Progress Bar (hidden until upload starts) -->
                                 <div id="upload-progress-wrap" class="hidden mt-4">
                                     <div class="flex justify-between text-xs font-semibold text-slate-500 mb-1">
@@ -3380,6 +3423,27 @@
                                 </div>
                             </div>
 
+                            <!-- REGISTERED STUDENTS SECTION -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                            <i class="ph-bold ph-identification-badge text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-slate-800">Registered Students</h3>
+                                            <p class="text-xs text-slate-500">Full database of enrolled users.</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="app.handlers.refreshRegisteredStudents()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh Database">
+                                        <i class="ph-bold ph-arrows-clockwise text-lg"></i>
+                                    </button>
+                                </div>
+                                <div id="registered-students-list" class="space-y-4">
+                                    <div class="text-slate-400 text-xs py-2 italic text-center">Loading student database...</div>
+                                </div>
+                            </div>
+
                             <!-- CLASS CODE SECTION (MOVE TO BOTTOM) -->
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
                                 <div class="flex items-center gap-3 mb-4">
@@ -3403,7 +3467,7 @@
                             </div>
                         `;
 
-                    // Auto-load class code and online students
+                    // Auto-load class code and online/registered students
                     setTimeout(() => {
                         DataService.getClassCode((res) => {
                             if (res.success) {
@@ -3412,6 +3476,7 @@
                             }
                         });
                         app.handlers.refreshOnlineStudents();
+                        app.handlers.refreshRegisteredStudents();
                     }, 100);
 
                     return wrap;
@@ -3729,15 +3794,24 @@
 
                 // TEACHER: SHOW MODULE SCORES MODAL
                 showModuleScores(modId) {
-                    const m = app.state.data.modules.find(mod => mod.id === modId);
-                    const modType = m ? (m.modType || 'Quiz') : 'Quiz';
+                    const cleanModId = String(modId).trim();
+                    const m = app.state.data.modules.find(mod => String(mod.id).trim() === cleanModId);
+                    
+                    if (!m) {
+                        app.showToast("Module data not found for results.", "error");
+                        return;
+                    }
+
+                    const modType = m.modType || 'Quiz';
                     const allProg = app.state.data.progress || {};
 
                     // Flatten Data for this Module
                     let rows = [];
-                    Object.keys(allProg).forEach(userId => {
-                        const entry = allProg[userId][modId];
-                        if (entry && entry.score !== null && entry.score !== undefined) {
+                    Object.keys(allProg).forEach(rawUserId => {
+                        const userId = String(rawUserId).trim();
+                        const entry = allProg[rawUserId][cleanModId];
+                        
+                        if (entry && (entry.score !== null || entry.points || entry.timestamp)) {
                             // Name Fallback: If progress sheet has no name, look up in students list
                             let studentName = entry.name;
                             if (!studentName || studentName === 'Anonymous') {
@@ -3756,6 +3830,7 @@
                                 date: entry.timestamp || 0,
                                 hasMon: entry.hasMon || false, // From backend getData
                                 isHighRisk: entry.isHighRisk || false,
+                                alertCount: entry.alertCount || 0,
                                 group: entry.group || ''
                             });
                         }
@@ -3814,16 +3889,21 @@
                                                                     <i class="ph-fill ph-warning-octagon"></i> HIGH RISK
                                                                 </span>` :
                                     (r.hasMon ?
-                                        `<span class="inline-flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-[10px] font-black border border-amber-100">
-                                                                        <i class="ph-fill ph-warning"></i> DATA
-                                                                    </span>` :
+                                        (r.alertCount > 2 ?
+                                            `<span class="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-black border border-amber-200">
+                                                <i class="ph-fill ph-warning"></i> ACTIVITY
+                                            </span>` :
+                                            `<span class="inline-flex items-center gap-1 bg-green-50 text-green-600 px-2 py-0.5 rounded-full text-[10px] font-black border border-green-100">
+                                                <i class="ph-fill ph-shield-check"></i> SECURE
+                                            </span>`
+                                        ) :
                                         `<span class="text-slate-300 text-[10px">—</span>`
                                     )
                                 }
                                                         </td>
                                                         <td class="px-4 py-3 text-center">
                                                             <div class="flex flex-col items-center">
-                                                                <span class="${r.score >= 75 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'} px-2 py-0.5 rounded font-bold text-xs">${r.score}%</span>
+                                                                <span class="${(r.score || 0) >= 75 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'} px-2 py-0.5 rounded font-bold text-xs">${r.score !== null ? r.score + '%' : '0%'}</span>
                                                                 <span class="text-xs text-slate-500 font-bold mt-1">${r.points}</span>
                                                             </div>
                                                         </td>
@@ -4484,7 +4564,9 @@
                                 document.getElementById('monitor-student-name').textContent = `${res.studentName} • ${modId}`;
                                 let logs = [];
                                 try {
-                                    logs = JSON.parse(res.monitoringData || '[]');
+                                    const parsed = JSON.parse(res.monitoringData || '[]');
+                                    // Handle legacy array vs wrapped object
+                                    logs = Array.isArray(parsed) ? parsed : (parsed.events || []);
                                 } catch (e) {
                                     console.error("JSON Parse Error in Monitoring Data:", e);
                                     logs = [];
@@ -4576,29 +4658,33 @@
 
                                         <div class="space-y-3">
                                             ${logs.map(log => {
-                                    let typeColor = 'bg-slate-100 text-slate-600';
-                                    let icon = 'ph-info';
-                                    if (log.type === 'Alert') { typeColor = 'bg-red-100 text-red-700'; icon = 'ph-warning'; }
-                                    if (log.type === 'Clipboard') { typeColor = 'bg-blue-100 text-blue-700'; icon = 'ph-copy'; }
-                                    if (log.type === 'Snapshot') { typeColor = 'bg-purple-100 text-purple-700'; icon = 'ph-camera'; }
-                                    if (log.type === 'State') { typeColor = 'bg-amber-100 text-amber-700'; icon = 'ph-eye'; }
+                                                const isCrit = log.crit === true || (log.msg && log.msg.includes('CRITICAL'));
+                                                let typeColor = 'bg-slate-100 text-slate-600';
+                                                let icon = 'ph-info';
+                                                if (log.type === 'Alert') { 
+                                                    typeColor = isCrit ? 'bg-red-100 text-red-700' : 'bg-red-50 text-red-600'; 
+                                                    icon = 'ph-warning-octagon'; 
+                                                }
+                                                if (log.type === 'Clipboard') { typeColor = 'bg-blue-100 text-blue-700'; icon = 'ph-copy'; }
+                                                if (log.type === 'Snapshot') { typeColor = 'bg-purple-100 text-purple-700'; icon = 'ph-camera'; }
+                                                if (log.type === 'State') { typeColor = 'bg-amber-100 text-amber-700'; icon = 'ph-eye'; }
 
-                                    return `
-                                                    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex gap-4">
-                                                        <div class="w-10 h-10 rounded-lg ${typeColor} flex items-center justify-center shrink-0">
-                                                            <i class="ph-bold ${icon} text-lg"></i>
-                                                        </div>
-                                                        <div class="min-w-0 flex-1">
-                                                            <div class="flex justify-between items-start">
-                                                                <span class="text-[10px] font-black uppercase tracking-widest ${typeColor.split(' ')[1]} opacity-70">${log.type}</span>
-                                                                <span class="text-[10px] text-slate-400 font-mono">${log.t}</span>
+                                                return `
+                                                    <div class="p-4 rounded-2xl border transition-all ${isCrit ? 'bg-red-50/50 border-red-200 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-white border-slate-100 shadow-sm'}">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <div class="flex items-center gap-2">
+                                                                <div class="px-2 py-0.5 rounded-full ${typeColor} text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                                    <i class="ph-fill ${icon}"></i> ${log.type}
+                                                                </div>
+                                                                ${isCrit ? '<span class="text-[9px] font-black text-red-700 bg-red-200 px-1.5 rounded animate-pulse">! CRITICAL</span>' : ''}
                                                             </div>
-                                                            <div class="font-bold text-sm text-slate-800 mt-0.5">${log.msg}</div>
-                                                            <div class="text-xs text-slate-500 mt-1">${log.det}</div>
+                                                            <span class="text-[10px] font-mono text-slate-400 font-bold">${log.t}</span>
                                                         </div>
+                                                        <div class="text-sm font-bold ${isCrit ? 'text-red-800' : 'text-slate-800'} mb-1">${log.msg}</div>
+                                                        ${log.det ? `<div class="text-[11px] leading-relaxed ${isCrit ? 'text-red-700 bg-white/70 p-2 rounded-lg border border-red-100' : 'text-slate-500'} italic">${log.det}</div>` : ''}
                                                     </div>
                                                 `;
-                                }).join('')}
+                                            }).join('')}
                                         </div>
                                     `;
                             } else {
@@ -4618,6 +4704,156 @@
                                     </div>
                                 `;
                         });
+                },
+
+                // TEACHER: SHOW MODULE CLASS ACTIVITY
+                showModuleClassActivity(modId) {
+                    const m = app.state.data.modules.find(mod => mod.id === modId);
+                    const modal = document.getElementById('modal-overlay');
+                    modal.innerHTML = `
+                        <div class="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-[scaleIn_0.3s_ease] border dark:border-slate-800">
+                            <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
+                                        <i class="ph-bold ph-presentation-chart text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-slate-800 text-lg">Class Activity</h3>
+                                        <p class="text-xs text-slate-500">Tracking ${m ? m.title : modId}</p>
+                                    </div>
+                                </div>
+                                <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+                                    <i class="ph-bold ph-x"></i>
+                                </button>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-6 bg-slate-50" id="module-activity-content">
+                                <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                                    <div class="spinner mb-4"></div>
+                                    <p>Loading class activity data...</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    modal.classList.remove('hidden');
+
+                    // Fetch fresh online status before rendering
+                    DataService.getOnlineStudents((res) => {
+                        if (res.success) {
+                            app.state.onlineStudents = res.students || [];
+                        }
+                        
+                        const allProg = app.state.data.progress || {};
+                        const students = [];
+                        const processedUserIds = new Set();
+                        const cleanModId = String(modId).trim();
+
+                        for (const rawUserId in allProg) {
+                            const uId = String(rawUserId).trim();
+                            const entry = allProg[rawUserId][cleanModId];
+                            
+                            if (entry) {
+                                const isOnlineHere = (app.state.onlineStudents || []).some(os => 
+                                    String(os.userId).trim() === uId && 
+                                    String(os.moduleId).trim() === cleanModId
+                                );
+                                students.push({ 
+                                    id: uId, 
+                                    ...entry, 
+                                    isLive: isOnlineHere 
+                                });
+                                processedUserIds.add(uId);
+                            }
+                        }
+                        
+                        // Also include online students who haven't started/saved progress yet
+                        (app.state.onlineStudents || []).forEach(os => {
+                            const osUid = String(os.userId).trim();
+                            if (String(os.moduleId).trim() === cleanModId && !processedUserIds.has(osUid)) {
+                                students.push({
+                                    id: osUid,
+                                    name: os.name,
+                                    grade: os.grade,
+                                    section: os.section,
+                                    score: null,
+                                    app: false,
+                                    content: false,
+                                    isLive: true,
+                                    photo: '',
+                                    hasMon: true
+                                });
+                            }
+                        });
+
+                        // Sort by Live status, then score
+                        students.sort((a,b) => {
+                            if (a.isLive !== b.isLive) return b.isLive ? 1 : -1;
+                            return (b.score || 0) - (a.score || 0);
+                        });
+
+                        const content = document.getElementById('module-activity-content');
+                        if (!content) return;
+                        
+                        if (students.length === 0) {
+                            content.innerHTML = `<div class="text-center py-20 text-slate-400 italic">No online students are currently tracking this module.</div>`;
+                            return;
+                        }
+
+                        content.innerHTML = `
+                            <div class="overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-soft">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Student Name</th>
+                                            <th class="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Progress</th>
+                                            <th class="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Score</th>
+                                            <th class="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${students.map(s => {
+                                            const isHighRisk = s.isHighRisk;
+                                            return `
+                                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                                    <td class="p-4">
+                                                        <div class="flex items-center gap-3">
+                                                            ${app.utils.renderAvatar(s.name, s.photo, "w-8 h-8")}
+                                                            <div>
+                                                                <div class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                                                                    ${s.name}
+                                                                    ${s.isLive ? '<span class="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Working currently"></span>' : ''}
+                                                                    ${isHighRisk ? '<i class="ph-fill ph-warning-octagon text-red-500 text-xs" title="High Risk Behavior"></i>' : ''}
+                                                                </div>
+                                                                <div class="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                                                                    ${s.grade} - ${s.section}
+                                                                    ${s.isLive ? '<span class="text-[9px] font-black text-green-600 uppercase tracking-tighter">● LIVE</span>' : '<span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">OFFLINE</span>'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                <td class="p-4">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                                                            <div class="h-full ${s.score !== null ? 'bg-green-500' : 'bg-brand-500'}" style="width: ${s.score !== null ? '100%' : (s.app ? '66%' : (s.content ? '33%' : '0%'))}"></div>
+                                                        </div>
+                                                        <span class="text-[10px] font-black text-slate-600">${s.score !== null ? 'DONE' : (s.app ? 'APP' : (s.content ? 'READ' : 'START'))}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="p-4 text-center">
+                                                    <span class="text-sm font-black ${s.score >= 80 ? 'text-green-600' : (s.score === null ? 'text-slate-300' : 'text-slate-700')}">${s.score !== null ? s.score + '%' : '--'}</span>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <button onclick="app.components.showMonitoringReport('${s.id}', '${modId}')" class="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-brand-50 hover:text-brand-600 transition-all ${!s.hasMon ? 'opacity-30 cursor-not-allowed' : ''}" ${!s.hasMon ? 'disabled' : ''} title="Audit Monitoring">
+                                                        <i class="ph-bold ph-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    });
                 },
 
                 // TEACHER: SHOW STUDENT PROFILE AT-A-GLANCE
@@ -4692,9 +4928,9 @@
                             recentActivityHtml = prog.map(rm => {
                                 let gradeHtml = '';
                                 if (rm.score !== null && rm.appGrade !== null) {
-                                    const avg = Math.round((rm.score + rm.appGrade) / 2);
+                                    const avg = Math.round(((rm.score || 0) + (rm.appGrade || 0)) / 2);
                                     gradeHtml = `
-                                            <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: ${rm.score}% &bull; Act: ${rm.appGrade}%</div>
+                                            <div class="text-[10px] text-slate-400 font-medium whitespace-nowrap">Quiz: ${(rm.score || 0)}% &bull; Act: ${(rm.appGrade || 0)}%</div>
                                             <div class="text-xs font-bold text-green-600 mt-0.5">${avg}% (Avg)</div>
                                         `;
                                 } else if (rm.appGrade !== null) {
@@ -5224,6 +5460,153 @@
                     app.render();
                 },
 
+                refreshRegisteredStudents() {
+                    const listEl = document.getElementById('registered-students-list');
+                    if (!listEl) return;
+
+                    BackEndService.call('getRegisteredStudents', [app.state.userId])
+                        .then(res => {
+                            if (res && res.success) {
+                                const students = (res.data && res.data.students) || res.students || [];
+                                if (students.length === 0) {
+                                    listEl.innerHTML = '<div class="text-slate-400 text-xs py-4 italic text-center">No students registered yet.</div>';
+                                    return;
+                                }
+
+                                // Group by section
+                                const sections = {};
+                                students.forEach(s => {
+                                    const sec = s.section || 'Unassigned';
+                                    if (!sections[sec]) sections[sec] = [];
+                                    sections[sec].push(s);
+                                });
+
+                                // UI Sort: Alphabetic keys for sections
+                                const sortedSectionNames = Object.keys(sections).sort();
+
+                                listEl.innerHTML = sortedSectionNames.map(secName => {
+                                    const secStudents = sections[secName];
+                                    return `
+                                        <div class="border-b last:border-0 border-slate-100 pb-4 last:pb-0">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div class="text-[11px] font-black uppercase tracking-widest text-slate-400">${secName} (${secStudents.length} Students)</div>
+                                            </div>
+                                            <div class="grid grid-cols-1 gap-2">
+                                                ${secStudents.map(s => {
+                                                    const initials = (s.lastName || '?') + (s.firstName || '?');
+                                                    const genderIcon = s.gender === 'Female' ? 'ph-gender-female text-rose-500' : 'ph-gender-male text-blue-500';
+                                                    return `
+                                                        <div class="bg-slate-50/50 p-2 rounded-xl flex items-center justify-between group hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                                                            <div class="flex items-center gap-3">
+                                                                <div class="relative">
+                                                                    ${app.utils.renderAvatar(s.lastName + ', ' + s.firstName, s.photo, "w-8 h-8")}
+                                                                    <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                                                                        <i class="${genderIcon} text-[10px]"></i>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <div class="text-xs font-bold text-slate-800 uppercase">${s.lastName}, ${s.firstName}</div>
+                                                                    <div class="text-[9px] text-slate-400 font-mono tracking-tighter">${s.username} • ${s.userId}</div>
+                                                                </div>
+                                                            </div>
+                                                            <button onclick="app.handlers.moveStudentSection('${s.userId}', '${s.section}')" class="opacity-0 group-hover:opacity-100 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand-600 hover:bg-brand-50 hover:border-brand-100 transition-all shadow-sm text-[10px] font-bold">
+                                                                Change Section
+                                                            </button>
+                                                        </div>
+                                                    `;
+                                                }).join('')}
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('');
+                            } else {
+                                listEl.innerHTML = `<div class="text-red-400 text-xs py-4 italic text-center">Error loading database: ${res.error || 'Unknown error'}</div>`;
+                            }
+                        })
+                        .catch(err => {
+                            listEl.innerHTML = `<div class="text-red-400 text-xs py-4 italic text-center">Connection error: ${err.message || err || 'Unknown error'}</div>`;
+                        });
+                },
+
+                moveStudentSection(targetUserId, currentSection) {
+                    // Derive existing sections from the displayed database
+                    const existingSections = Array.from(document.querySelectorAll('.text-\\[11px\\].font-black.uppercase.tracking-widest.text-slate-400'))
+                        .map(el => el.textContent.split(' (')[0].trim())
+                        .filter(s => s && s !== currentSection);
+
+                    app.showModal(`
+                        <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 animate-[scaleIn_0.3s_ease] border border-slate-100 dark:border-slate-800">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-12 h-12 rounded-xl bg-brand-100 text-brand-600 flex items-center justify-center">
+                                    <i class="ph-bold ph-arrows-out-line text-2xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-lg uppercase">Change Section</h3>
+                                    <p class="text-xs text-slate-500">Reassign student to a different class</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-400 block mb-2 tracking-widest">New Section Name</label>
+                                    <input type="text" id="new-section-input" value="${currentSection}" placeholder="Enter section name..."
+                                        class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:border-brand-500 focus:bg-white focus:outline-none text-sm font-bold text-slate-800 shadow-sm transition-all">
+                                </div>
+
+                                ${existingSections.length > 0 ? `
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase text-slate-400 block mb-2 tracking-widest">Quick Select Existing</label>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            ${existingSections.map(s => `
+                                                <button onclick="document.getElementById('new-section-input').value = '${s}'; app.handlers.confirmMoveSection('${targetUserId}', '${currentSection}')" 
+                                                    class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-brand-100 hover:text-brand-700 transition-colors text-[10px] font-bold text-slate-600">
+                                                    ${s}
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3 mt-8">
+                                <button onclick="app.closeModal()" class="w-full py-4 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-all">Cancel</button>
+                                <button id="btn-update-section" onclick="app.handlers.confirmMoveSection('${targetUserId}', '${currentSection}')" 
+                                    class="w-full py-4 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl hover:translate-y-[-2px] transition-all flex items-center justify-center gap-2">
+                                    Update Section
+                                </button>
+                            </div>
+                        </div>
+                    `);
+                },
+
+                confirmMoveSection(targetUserId, currentSection) {
+                    const newSectionInput = document.getElementById('new-section-input');
+                    const newSection = newSectionInput.value.trim();
+                    
+                    if (!newSection || newSection === currentSection) {
+                        app.closeModal();
+                        return;
+                    }
+
+                    app.showToast("Updating section...", "info");
+                    BackEndService.call('updateStudentSection', [app.state.userId, targetUserId, newSection])
+                        .then(res => {
+                            if (res && res.success) {
+                                // GAS returns wrapped data, handle both
+                                const msg = res.message || (res.data && res.data.message) || "Student moved successfully";
+                                app.showToast(msg, "success");
+                                app.closeModal();
+                                app.handlers.refreshRegisteredStudents();
+                                app.handlers.refreshOnlineStudents();
+                            } else {
+                                app.showToast("Update failed: " + (res.error || 'Unknown error'), "error");
+                            }
+                        })
+                        .catch(err => {
+                            app.showToast("Connection failed: " + (err.message || err), "error");
+                        });
+                },
+
                 // TEACHER: CLASS MANAGEMENT UI HANDLERS
                 generateNewCode(btn) {
                     if (!btn && event) btn = event.currentTarget;
@@ -5286,6 +5669,7 @@
 
                     DataService.getOnlineStudents((res) => {
                         if (res.success) {
+                            app.state.onlineStudents = res.students || [];
                             if (res.students && res.students.length > 0) {
                                 listEl.innerHTML = res.students.map(s => {
                                     // Format online duration
@@ -6576,6 +6960,7 @@
                 launchQuizInterface(modId, baselinePhoto = null, existingStream = null) {
                     const mod = app.state.data.modules.find(m => m.id === modId);
                     const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
+                    const QUIZ_DURATION = 60; // Single source of truth for the timer (in seconds)
 
                     app.state.currentActivity = {
                         moduleId: modId,
@@ -6602,7 +6987,11 @@
 
                     // Track original indices for item analysis
                     const originalQuizData = mod.quiz.map((q, idx) => ({ ...q, originalIndex: idx }));
-                    app.state.currentQuizResults = new Array(originalQuizData.length).fill(0);
+                    app.state.currentQuizResults = new Array(originalQuizData.length).fill(null);
+                    const userAnswers = new Array(originalQuizData.length).fill(null);
+                    
+                    let totalTimeRemaining = originalQuizData.length * QUIZ_DURATION;
+                    let quizGlobalTimer;
 
                     const quizData = shuffleArray(JSON.parse(JSON.stringify(originalQuizData))).map(q => {
                         const optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, isCorrect: idx === q.a }));
@@ -6615,15 +7004,26 @@
                     });
 
                     let currentQ = 0;
-                    let score = 0;
-                    let questionTimer;
-                    let timeRemaining;
+                    let questionTimer; // Legacy ref - will be used for quizGlobalTimer wrapper
+                    
+                    const formatTime = (seconds) => {
+                        const m = Math.floor(seconds / 60);
+                        const s = seconds % 60;
+                        return `${m}:${s.toString().padStart(2, '0')}`;
+                    };
 
                     const renderQ = () => {
                         if (currentQ >= quizData.length) {
-                            // Handle empty quiz case to prevent NaN
-                            const finalScore = quizData.length > 0 ? Math.round((score / quizData.length) * 100) : 0;
-                            const pointsStr = score + '/' + quizData.length;
+                             // Final Score Calculation
+                            let finalScoreVal = 0;
+                            quizData.forEach((qd, idx) => {
+                                const isCorrect = userAnswers[idx] === qd.a;
+                                app.state.currentQuizResults[qd.originalIndex] = isCorrect ? 1 : 0;
+                                if (isCorrect) finalScoreVal++;
+                            });
+
+                            const finalScore = quizData.length > 0 ? Math.round((finalScoreVal / quizData.length) * 100) : 0;
+                            const pointsStr = finalScoreVal + '/' + quizData.length;
                             const analysisStr = JSON.stringify(app.state.currentQuizResults);
 
                             // Show Processing UI immediately
@@ -6698,89 +7098,96 @@
                         const qEl = document.createElement('div');
                         qEl.className = "bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-2xl p-6 shadow-2xl relative overflow-hidden animate-[scaleIn_0.3s_ease]";
 
-                        timeRemaining = 45;
-
                         qEl.innerHTML = `
                                 <div class="flex justify-between items-center mb-4 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">
                                     <span>Question ${currentQ + 1}/${quizData.length}</span>
-                                    <div class="flex items-center gap-2 text-brand-600 bg-brand-50 px-3 py-1 rounded-full">
-                                        <i class="ph-bold ph-timer"></i>
-                                        <span id="timer-display">45</span>s
+                                    <div class="flex items-center gap-2 text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100">
+                                        <i class="ph-bold ph-hourglass-high"></i>
+                                        <span id="timer-display" class="font-mono">${formatTime(totalTimeRemaining)}</span>
                                     </div>
                                     <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-50 text-red-600 animate-pulse">
                                         <div class="w-2 h-2 rounded-full bg-red-600"></div>
                                         <span class="text-[10px] font-black tracking-tighter uppercase">REC</span>
                                     </div>
-                                    <button onclick="app.handlers.showQuizExitConfirmation('${modId}')" class="hover:text-red-500 ${modType === 'Exam' ? 'hidden' : ''}"><i class="ph-bold ph-x text-lg"></i></button>
                                 </div>
                                 
                                 <div class="overflow-y-auto flex-1 pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full">
                                     <h4 class="text-lg font-bold text-slate-800 mb-6">${q.q}</h4>
-                                    <div class="space-y-3 pb-2" id="options-container">
+                                    <div class="space-y-3 pb-4" id="options-container">
                                         ${q.options.map((opt, idx) => `
-                                            <button class="opt-btn w-full text-left p-4 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors font-medium text-slate-700" data-idx="${idx}">
+                                            <button class="opt-btn w-full text-left p-4 rounded-xl border ${userAnswers[currentQ] === idx ? 'border-brand-500 bg-brand-50 text-brand-700 font-bold' : 'border-slate-200'} hover:bg-slate-50 transition-all text-slate-700" data-idx="${idx}">
                                                 ${opt}
                                             </button>
                                         `).join('')}
                                     </div>
                                 </div>
-                            `;
 
-                        const timerDisplay = qEl.querySelector('#timer-display');
-                        questionTimer = setInterval(() => {
-                            timeRemaining--;
-                            timerDisplay.textContent = timeRemaining;
-                            if (timeRemaining <= 10) {
-                                timerDisplay.parentElement.classList.replace('text-brand-600', 'text-red-600');
-                                timerDisplay.parentElement.classList.replace('bg-brand-50', 'bg-red-50');
-                            }
-                            if (timeRemaining <= 0) {
-                                clearInterval(questionTimer);
-                                // Auto-proceed logic (as if incorrect, so score does not increase)
-                                qEl.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
-                                // Record timeout as 0 (incorrect) at the original question index
-                                app.state.currentQuizResults[q.originalIndex] = 0;
-                                setTimeout(() => {
-                                    currentQ++;
-                                    renderQ();
-                                }, 1000);
-                            }
-                        }, 1000);
-                        // Save timer reference globally for emergency cancel
-                        window._quizTimer = questionTimer;
+                                <div class="flex gap-3 pt-4 border-t border-slate-100 shrink-0">
+                                    <button id="prev-q" class="flex-1 py-3.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-30" ${currentQ === 0 ? 'disabled' : ''}>
+                                        Back
+                                    </button>
+                                    <button id="next-q" class="flex-[2] py-3.5 rounded-xl font-bold bg-brand-600 text-white shadow-lg hover:bg-brand-700 transition-all">
+                                        ${currentQ === quizData.length - 1 ? 'Finish & Submit' : 'Next'}
+                                    </button>
+                                </div>
+                            `;
 
                         qEl.querySelectorAll('.opt-btn').forEach(btn => {
                             btn.onclick = function () {
-                                clearInterval(questionTimer);
-                                // Disable all buttons to prevent double click
-                                qEl.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
-
-                                const selected = parseInt(this.dataset.idx);
-                                const isCorrect = selected === q.a;
-
-                                // Record item result (1 for correct, 0 for incorrect) at the original question index
-                                app.state.currentQuizResults[q.originalIndex] = isCorrect ? 1 : 0;
-
-                                // Silent Score Update
-                                if (isCorrect) {
-                                    score++;
-                                }
-
-                                // Neutral Selection styling
+                                const idx = parseInt(this.dataset.idx);
+                                userAnswers[currentQ] = idx;
+                                
+                                qEl.querySelectorAll('.opt-btn').forEach(b => {
+                                    b.classList.remove('border-brand-500', 'bg-brand-50', 'text-brand-700', 'font-bold');
+                                    b.classList.add('border-slate-200');
+                                });
                                 this.classList.replace('border-slate-200', 'border-brand-500');
-                                this.classList.replace('hover:bg-slate-50', 'bg-brand-50');
-                                this.classList.add('text-brand-700');
-
-                                // Short delay before next question
-                                setTimeout(() => {
-                                    currentQ++;
-                                    renderQ();
-                                }, 500);
+                                this.classList.add('bg-brand-50', 'text-brand-700', 'font-bold');
                             }
                         });
 
+                        // Final DOM Attachment
                         modal.innerHTML = '';
                         modal.appendChild(qEl);
+                        
+                        // ATTACH LISTENERS AFTER APPENDING TO DOM
+                        document.getElementById('prev-q').onclick = () => {
+                            currentQ--;
+                            renderQ();
+                        };
+
+                        document.getElementById('next-q').onclick = () => {
+                            if (currentQ < quizData.length - 1) {
+                                currentQ++;
+                                renderQ();
+                            } else {
+                                clearInterval(quizGlobalTimer);
+                                currentQ++; // This triggers the final calculation in renderQ at currentQ >= length
+                                renderQ();
+                            }
+                        };
+                    };
+
+                    // ---- GLOBAL TIMER WRAPPER ----
+                    const startGlobalTimer = () => {
+                        quizGlobalTimer = setInterval(() => {
+                            totalTimeRemaining--;
+                            const display = document.getElementById('timer-display');
+                            if (display) display.textContent = formatTime(totalTimeRemaining);
+
+                            if (totalTimeRemaining <= 30) {
+                                if (display) display.parentElement.classList.replace('text-brand-600', 'text-red-500');
+                                if (display) display.parentElement.classList.replace('bg-brand-50', 'bg-red-50');
+                            }
+
+                            if (totalTimeRemaining <= 0) {
+                                clearInterval(quizGlobalTimer);
+                                // FORCE AUTO-SUBMIT
+                                currentQ = quizData.length;
+                                renderQ();
+                            }
+                        }, 1000);
+                        window._quizTimer = quizGlobalTimer;
                     };
 
                     // Start Screen
@@ -6792,22 +7199,22 @@
                                 <h3 class="text-2xl font-black text-slate-800 mb-2 uppercase tracking-wide">${modType} Rules</h3>
                                 <p class="text-slate-500 mb-6 font-medium">Read carefully before starting!</p>
                                 
-                                <ul class="text-left space-y-4 mb-8 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                                    <li class="flex items-start gap-3">
-                                        <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
-                                        <span class="text-sm text-slate-700 font-medium"><strong>No Cheating:</strong> Do not open other tabs, windows, or devices. Focus on your screen.</span>
+                                <ul class="text-left space-y-3 mb-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
+                                    <li class="flex items-center gap-3">
+                                        <i class="ph-fill ph-clock-countdown text-brand-500 text-lg"></i>
+                                        <span class="text-xs text-slate-600"><strong>Time Banking:</strong> Saved time is added to your pool.</span>
                                     </li>
-                                    <li class="flex items-start gap-3">
-                                        <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
-                                        <span class="text-sm text-slate-700 font-medium"><strong>Closed Notes:</strong> No reading of notes, study materials, or books.</span>
+                                    <li class="flex items-center gap-3">
+                                        <i class="ph-fill ph-arrows-left-right text-brand-500 text-lg"></i>
+                                        <span class="text-xs text-slate-600"><strong>Backtrack:</strong> Review answers as long as time remains.</span>
                                     </li>
-                                    <li class="flex items-start gap-3">
-                                        <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
-                                        <span class="text-sm text-slate-700 font-medium"><strong>No Sharing:</strong> Taking the ${modType.toLowerCase()} is a solo activity. Do not share answers with your classmates.</span>
+                                    <li class="flex items-center gap-3">
+                                        <i class="ph-fill ph-shield-check text-brand-500 text-lg"></i>
+                                        <span class="text-xs text-slate-600"><strong>Confirm:</strong> Click "Next" to save your selection.</span>
                                     </li>
-                                    <li class="flex items-start gap-3">
-                                        <i class="ph-fill ph-check-circle text-brand-500 mt-1 text-lg"></i>
-                                        <span class="text-sm text-slate-700 font-medium"><strong>Time Limit:</strong> You have <strong>45 seconds</strong> per question! You cannot go back to previous questions.</span>
+                                    <li class="flex items-center gap-3">
+                                        <i class="ph-fill ph-fire text-brand-500 text-lg"></i>
+                                        <span class="text-xs text-slate-600"><strong>Auto-Submit:</strong> Quiz finishes when time hits zero.</span>
                                     </li>
                                 </ul>
                                 
@@ -6815,18 +7222,23 @@
                                     <button onclick="document.getElementById('modal-overlay').classList.add('hidden')" class="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">
                                         Cancel
                                     </button>
-                                    <button id="btn-start-quiz" class="flex-[2] px-4 py-3 bg-brand-600 text-white font-bold rounded-xl shadow-lg shadow-brand-500/30 hover:bg-brand-700 transition-all uppercase tracking-wider relative overflow-hidden group">
-                                        <span class="relative z-10 flex items-center justify-center gap-2">I Understand, Start! <i class="ph-bold ph-arrow-right"></i></span>
+                                    <button id="btn-start-quiz" class="flex-[2] px-4 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:translate-y-[-2px] active:translate-y-0">
+                                        Start Quiz
                                     </button>
                                 </div>
                             </div>
                         `;
 
-                    document.getElementById('btn-start-quiz').onclick = () => {
-                        // Start Monitoring background process only when quiz starts
-                        MonitorService.start(modId, baselinePhoto, existingStream);
-                        renderQ();
-                    };
+                    const startBtn = document.getElementById('btn-start-quiz');
+                    if (startBtn) {
+                        startBtn.onclick = () => {
+                            // Start Monitoring
+                            MonitorService.start(modId, baselinePhoto, existingStream);
+                            // Start Quiz UI
+                            startGlobalTimer();
+                            renderQ();
+                        };
+                    }
                 },
 
                 resetStudent(modId) {
@@ -6854,44 +7266,6 @@
                     });
                 },
 
-                showQuizExitConfirmation(modId) {
-                    const mod = app.state.data.modules.find(m => m.id === modId);
-                    const modType = mod ? (mod.modType || 'Quiz') : 'Quiz';
-
-                    const modal = document.createElement('div');
-                    modal.id = 'exit-confirmation-overlay';
-                    modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-[fadeIn_0.2s_ease-out]';
-                    modal.innerHTML = `
-                            <div class="bg-white w-full max-w-sm rounded-[32px] p-8 text-center shadow-2xl border border-white/20 animate-[scaleIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)]">
-                                <div class="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <i class="ph-bold ph-warning-octagon text-4xl"></i>
-                                </div>
-                                <h3 class="text-2xl font-black text-slate-800 mb-2 font-display uppercase tracking-tight">Exit ${modType}?</h3>
-                                <p class="text-slate-500 mb-8 text-sm leading-relaxed px-2 font-medium">Are you sure you want to stop? Your current progress will be lost and your instructor will be notified.</p>
-                                
-                                <div class="flex flex-col gap-3">
-                                    <button id="btn-confirm-exit" class="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-700 transition-all transform hover:scale-[1.02] active:scale-[0.98]">
-                                        Yes, Exit ${modType}
-                                    </button>
-                                    <button id="btn-cancel-exit" class="w-full bg-slate-100 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all">
-                                        Continue ${modType}
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    document.body.appendChild(modal);
-
-                    document.getElementById('btn-confirm-exit').onclick = () => {
-                        modal.remove();
-                        document.getElementById('modal-overlay').classList.add('hidden');
-                        if (window._quizTimer) clearInterval(window._quizTimer);
-                        MonitorService.stop();
-                    };
-
-                    document.getElementById('btn-cancel-exit').onclick = () => {
-                        modal.remove();
-                    };
-                }
             }
         };
 
