@@ -1,16 +1,9 @@
 <!--
-    v4.6.0 - 2026-04-07 10:55 PM: [CRITICAL] Class Results Restored. 'View Class Results' now shows BOTH online and offline students. Integrated hardened score aggregation logic to eliminate 0% discrepancies for offline students. Removed 'Real-time ONLY' filtering from Results modal.
+    v4.7.0 - 2026-04-12 12:05 AM: [FEATURE] Periscope Integration: Added 'Parent Link Requests' panel to Class Management. Teachers can one-click approve parent-student pairing with AUTO-MATCHED badge.
+    v4.6.0 - 2026-04-07 10:55 PM: [CRITICAL] Class Results Restored. 'View Class Results' now shows BOTH online and offline students. Integrated hardened score aggregation logic to eliminate 0% discrepancies for offline students.
     v4.5.0 - 2026-04-07 07:35 PM: [FEATURE] Upload Module now includes Step 4 to Enable/Disable module on post (default: disabled). [FIX] Eliminated 'null%' from Leaderboards by defaulting to 0%.
-    v4.4.2 - 2026-04-07 07:15 PM: [FIX] Eliminated 'null%' scores in results. [ENHANCEMENT] Precision Monitoring: Tagged Copy/Paste as 'CRITICAL' alerts. Replaced 'DATA' label with 'SECURE/ACTIVITY/HIGH RISK' based on alert severity. Enhanced Monitoring Report with critical highlights.
-    v4.4.1 - 2026-04-07 07:05 PM: [FIX] Simplified quiz rules UI for better mobile/screen fit. Fixed 'Start Quiz' button wiring issue. Added periodic heartbeat to MonitorService to ensure students appear in 'Class Activity' monitor.
-    v4.4.0 - 2026-04-07 06:40 PM: [FEATURE] Introduced 'Time Banking' mechanics; quiz now uses a Global Time Pool where saved time from quick answers can be used for backtracking and review. Redesigned Rules screen.
-    v4.3.1 - 2026-04-07 06:30 PM: [FEATURE] Implemented 'Sticky Timers' for backtracking; remaining time per question is now saved and never resets when navigating between questions. Added 'Time Expired' lock state.
-    v4.3.0 - 2026-04-07 06:15 PM: [FEATURE] Overhauled quiz system with backtracking (Prev/Next buttons) and selection-confirmation mode to prevent accidental submissions. Added class-wide Top 5 leaderboard. Fixed 'NaN' score corruption.
-    v4.2.2 - 2026-04-07 03:16 PM: [FIX] Strictly filtered Class Activity to only show currently online (LIVE) students for real-time monitoring.
-    v4.2.1 - 2026-04-07 03:08 PM: [FIX] Removed hardcoded API_URL fallback to prevent content mirroring when sharing the standalone HTML file.
-    v4.2.0 - 2026-04-07 12:36 PM: [FEATURE] Refactored quiz timer to use a single constant (QUIZ_DURATION) for easier updates; increased default time to 60s.
-    v4.1.0 - 2026-04-07 11:42 AM: [FIX] Restored Class Results modal by implementing strict ID sanitization (trimming) and returning the full student roster to the teacher state.
-    v4.0.9 - 2026-04-07 11:27 AM: [FEATURE] Removed "Exit Quiz" button to prevent premature assessment termination and maintain test integrity.
+    v4.4.2 - 2026-04-07 07:15 PM: [FIX] Eliminated 'null%' scores in results. [ENHANCEMENT] Precision Monitoring: Tagged Copy/Paste as 'CRITICAL' alerts.
+    v4.4.1 - 2026-04-07 07:05 PM: [FIX] Simplified quiz rules UI for better mobile/screen fit. Fixed 'Start Quiz' button wiring issue.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -1895,7 +1888,7 @@
                     this.state.currentActivity = {
                         moduleId: param,
                         moduleTitle: mod ? mod.title : param,
-                        step: 'Viewing Module'
+                        step: 'Content'
                     };
                 } else if (view === 'dashboard') {
                     this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Browsing' };
@@ -3424,27 +3417,51 @@
                             </div>
 
                             <!-- REGISTERED STUDENTS SECTION -->
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
-                                <div class="flex items-center justify-between mb-4">
+                            <details class="bg-white rounded-2xl border border-slate-200 shadow-soft mb-6 group cursor-pointer" open>
+                                <summary class="p-5 flex items-center justify-between font-bold outline-none select-none">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
                                             <i class="ph-bold ph-identification-badge text-xl"></i>
                                         </div>
                                         <div>
                                             <h3 class="font-bold text-slate-800">Registered Students</h3>
-                                            <p class="text-xs text-slate-500">Full database of enrolled users.</p>
+                                            <p class="text-xs text-slate-500 font-normal">Click to toggle list visibility.</p>
                                         </div>
                                     </div>
-                                    <button onclick="app.handlers.refreshRegisteredStudents()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh Database">
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="app.handlers.refreshRegisteredStudents(); event.preventDefault();" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh Database">
+                                            <i class="ph-bold ph-arrows-clockwise text-lg"></i>
+                                        </button>
+                                        <i class="ph-bold ph-caret-down text-slate-400 group-open:rotate-180 transition-transform text-xl"></i>
+                                    </div>
+                                </summary>
+                                <div class="px-5 pb-5 border-t border-slate-100 pt-4">
+                                    <div id="registered-students-list" class="space-y-4">
+                                        <div class="text-slate-400 text-xs py-2 italic text-center">Loading student database...</div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <!-- PERISCOPE: PARENT LINK REQUESTS -->
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                            <i class="ph-bold ph-link-simple text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-slate-800">Periscope Link Requests</h3>
+                                            <p class="text-xs text-slate-500">Approve parent-student pairing requests.</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="app.handlers.refreshPairingRequests()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Refresh Requests">
                                         <i class="ph-bold ph-arrows-clockwise text-lg"></i>
                                     </button>
                                 </div>
-                                <div id="registered-students-list" class="space-y-4">
-                                    <div class="text-slate-400 text-xs py-2 italic text-center">Loading student database...</div>
+                                <div id="pairing-requests-list" class="space-y-3">
+                                    <div class="text-slate-400 text-xs py-2 italic text-center">Loading requests...</div>
                                 </div>
                             </div>
-
-                            <!-- CLASS CODE SECTION (MOVE TO BOTTOM) -->
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-soft p-5 mb-6">
                                 <div class="flex items-center gap-3 mb-4">
                                     <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
@@ -3477,6 +3494,7 @@
                         });
                         app.handlers.refreshOnlineStudents();
                         app.handlers.refreshRegisteredStudents();
+                        app.handlers.refreshPairingRequests();
                     }, 100);
 
                     return wrap;
@@ -5460,6 +5478,92 @@
                     app.render();
                 },
 
+                refreshPairingRequests() {
+                    const listEl = document.getElementById('pairing-requests-list');
+                    if (!listEl) return;
+
+                    BackEndService.call('getPairingRequests', [app.state.userId])
+                        .then(res => {
+                            const requests = (res && res.requests) || (res && res.data && res.data.requests) || [];
+                            if (requests.length === 0) {
+                                listEl.innerHTML = '<div class="text-slate-400 text-xs py-4 italic text-center">No pending parent link requests.</div>';
+                                return;
+                            }
+
+                            listEl.innerHTML = requests.map(r => {
+                                const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Unknown';
+                                return `
+                                    <div class="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between gap-3">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="text-[9px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-widest">AUTO-MATCHED</span>
+                                                <span class="text-[9px] text-slate-400 font-mono">${date}</span>
+                                            </div>
+                                            <div class="text-xs font-bold text-slate-800"><i class="ph ph-user-circle mr-1 text-emerald-600"></i>${r.parentName} wants to link to:</div>
+                                            <div class="text-sm font-black text-slate-900 uppercase tracking-tight"><i class="ph ph-student mr-1 text-blue-500"></i>${r.studentName}</div>
+                                        </div>
+                                        <div class="shrink-0 flex items-center gap-2">
+                                            <button onclick="app.handlers.disapprovePairingRequest('${r.requestId}')" class="bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs p-3 rounded-xl transition-all" title="Decline Request">
+                                                <i class="ph-bold ph-x"></i>
+                                            </button>
+                                            <button onclick="app.handlers.approvePairingRequest('${r.requestId}')" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-md shadow-emerald-100 transition-all">
+                                                Link<i class="ph-bold ph-link-simple ml-1"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        })
+                        .catch(() => { listEl.innerHTML = '<div class="text-red-400 text-xs text-center py-2">Error loading requests.</div>'; });
+                },
+
+                approvePairingRequest(requestId) {
+                    BackEndService.call('approvePairing', [requestId, app.state.userId])
+                        .then(res => {
+                            const ok = (res && res.success) || (res && res.data && res.data.success);
+                            if (ok) {
+                                app.showToast('Linked! Parent can now monitor this student.', 'success');
+                                app.handlers.refreshPairingRequests();
+                            } else {
+                                app.showToast('Error: ' + ((res && res.error) || 'Unknown'), 'error');
+                            }
+                        })
+                        .catch(e => app.showToast('Connection error.', 'error'));
+                },
+
+                disapprovePairingRequest(requestId) {
+                    app.showModal(`
+                        <div class="p-8 text-center">
+                            <div class="w-16 h-16 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="ph-bold ph-x text-3xl"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Reject Request?</h3>
+                            <p class="text-xs text-slate-500 mb-6">Are you sure you want to decline this parent link request? The parent will be notified.</p>
+                            <div class="flex gap-3">
+                                <button onclick="app.closeModal()" class="flex-1 px-4 py-3 bg-slate-100 font-bold rounded-xl text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+                                <button onclick="app.handlers.confirmDisapprove('${requestId}'); this.disabled=true; this.innerHTML='<div class=\\'spinner w-4 h-4 border-2 inline-block align-middle mr-1\\'></div> Rejecting...';" class="flex-1 px-4 py-3 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition-colors">Reject Request</button>
+                            </div>
+                        </div>
+                    `);
+                },
+
+                confirmDisapprove(requestId) {
+                    BackEndService.call('disapprovePairing', [requestId, app.state.userId])
+                        .then(res => {
+                            const ok = (res && res.success) || (res && res.data && res.data.success);
+                            if (ok) {
+                                app.showToast('Request declined.', 'info');
+                                app.handlers.refreshPairingRequests();
+                                app.closeModal();
+                            } else {
+                                app.showToast('Error: ' + ((res && res.error) || 'Unknown'), 'error');
+                                app.closeModal();
+                            }
+                        })
+                        .catch(e => {
+                            app.showToast('Connection error: ' + (e.message || e), 'error');
+                            app.closeModal();
+                        });
+                },
+
                 refreshRegisteredStudents() {
                     const listEl = document.getElementById('registered-students-list');
                     if (!listEl) return;
@@ -6494,7 +6598,7 @@
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
-                        step: `Taking ${modType}`
+                        step: 'Quiz'
                     };
 
                     const info = app.state.studentInfo || {};
@@ -6965,7 +7069,7 @@
                     app.state.currentActivity = {
                         moduleId: modId,
                         moduleTitle: mod ? mod.title : modId,
-                        step: modType
+                        step: 'Quiz'
                     };
 
                     const modal = document.getElementById('modal-overlay');
