@@ -1,9 +1,9 @@
 <!--
+    v4.8.7 - 2026-06-10 10:40 PM: [FIX] Monitoring: Reduced heartbeat snapshots count to 2 on frontend to prevent payload exceeding Sheets cell limit.
+    v4.8.6 - 2026-06-10 10:30 PM: [FIX] Monitoring: Prevented duplicate sync calls in MonitorService.stop to eliminate concurrency issues.
     v4.8.5 - 2026-06-10 10:20 PM: [FIX] Monitoring: Added modId property to currentActivity objects to align with backend and resolved stats object property initialization in MonitorService.
     v4.8.4 - 2026-06-10 10:10 PM: [FIX] Quiz Attempts: Removed Retry button from Quiz Complete modal, checked backend attempt count before quiz start, and enforced 2-attempt max or >= 80% passing block in UI.
     v4.8.3 - 2026-06-10 09:35 PM: [FIX] Security: Removed legacy client-side interceptor that replaced valid teacher code with obsolete 'TEACHER_ACCESS'.
-    v4.8.2 - 2026-06-10 09:15 PM: [FIX] Security: Restrict student/teacher registration to matching classCode types (prevent student code registration as teacher).
-    v4.8.1 - 2026-06-10 08:45 PM: [FIX] Registration: Force classCode/accessCode to uppercase to prevent matching failure resulting in student mode instead of teacher mode.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -739,7 +739,13 @@
                 if (this.state.interval) clearInterval(this.state.interval);
 
                 this.removeListeners();
-                this.log('System', 'Monitoring Stopped', 'Quiz Session Ended');
+                this.state.logs.push({
+                    t: new Date().toLocaleTimeString(),
+                    type: 'System',
+                    msg: 'Monitoring Stopped',
+                    det: 'Quiz Session Ended',
+                    crit: false
+                });
 
                 // Final sync returns a promise so callers can wait for data saving
                 return this.sync();
@@ -811,12 +817,12 @@
             },
 
             log(type, message, detail = '', isCritical = false) {
-                // Rolling Buffer for Snapshots: Keep only the last 5 images to save space
+                // Rolling Buffer for Snapshots: Keep baseline + last 2 heartbeat snapshots to save space
                 if (type === 'Snapshot') {
-                    const snapCount = this.state.logs.filter(l => l.type === 'Snapshot').length;
-                    if (snapCount >= 5) {
-                        const firstSnapIdx = this.state.logs.findIndex(l => l.type === 'Snapshot');
-                        if (firstSnapIdx !== -1) this.state.logs.splice(firstSnapIdx, 1);
+                    const heartbeats = this.state.logs.filter(l => l.type === 'Snapshot' && l.msg !== 'Identity Confirmed');
+                    if (heartbeats.length >= 2) {
+                        const firstHeartbeatIdx = this.state.logs.findIndex(l => l.type === 'Snapshot' && l.msg !== 'Identity Confirmed');
+                        if (firstHeartbeatIdx !== -1) this.state.logs.splice(firstHeartbeatIdx, 1);
                     }
                 }
 
