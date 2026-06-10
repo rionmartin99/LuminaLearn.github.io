@@ -1,9 +1,9 @@
 <!--
+    v4.8.5 - 2026-06-10 10:20 PM: [FIX] Monitoring: Added modId property to currentActivity objects to align with backend and resolved stats object property initialization in MonitorService.
+    v4.8.4 - 2026-06-10 10:10 PM: [FIX] Quiz Attempts: Removed Retry button from Quiz Complete modal, checked backend attempt count before quiz start, and enforced 2-attempt max or >= 80% passing block in UI.
     v4.8.3 - 2026-06-10 09:35 PM: [FIX] Security: Removed legacy client-side interceptor that replaced valid teacher code with obsolete 'TEACHER_ACCESS'.
     v4.8.2 - 2026-06-10 09:15 PM: [FIX] Security: Restrict student/teacher registration to matching classCode types (prevent student code registration as teacher).
     v4.8.1 - 2026-06-10 08:45 PM: [FIX] Registration: Force classCode/accessCode to uppercase to prevent matching failure resulting in student mode instead of teacher mode.
-    v4.8.0 - 2026-06-10 08:23 PM: [FIX] Security Hardening: Kept hardcoded API URL fallback. Added sanitize() XSS helper applied to all innerHTML injections. Stripped secretAnswer from localStorage cache. Quiz answer keys (.a) removed from data cache.
-    v4.7.0 - 2026-04-12 12:05 AM: [FEATURE] Periscope Integration: Added 'Parent Link Requests' panel to Class Management. Teachers can one-click approve parent-student pairing with AUTO-MATCHED badge.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -683,11 +683,11 @@
 
                 // RESET STATS FOR NEW SESSION
                 this.state.stats = {
+                    alerts: 0,
                     tabSwitches: 0,
-                    lastHiddenAt: null,
-                    totalHiddenTime: 0,
-                    clipboardCount: 0,
-                    snapshotCount: 0
+                    clipboard: 0,
+                    snapshots: 0,
+                    totalTimeAway: 0
                 };
 
                 this.state.currentModId = modId;
@@ -1656,7 +1656,7 @@
                 userId: null,
                 studentInfo: null, // Stores { name, grade, section } per session
                 loginTime: null, // ISO string of when student logged in
-                currentActivity: { moduleId: null, moduleTitle: null, step: 'Browsing' },
+                currentActivity: { moduleId: null, modId: null, moduleTitle: null, step: 'Browsing' },
                 pdfState: {
                     pdfDoc: null,
                     pageNum: 1,
@@ -1911,15 +1911,16 @@
                     const mod = this.state.data.modules.find(m => m.id === param);
                     this.state.currentActivity = {
                         moduleId: param,
+                        modId: param,
                         moduleTitle: mod ? mod.title : param,
                         step: 'Content'
                     };
                 } else if (view === 'dashboard') {
-                    this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Browsing' };
+                    this.state.currentActivity = { moduleId: null, modId: null, moduleTitle: null, step: 'Browsing' };
                 } else if (view === 'profile') {
-                    this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Viewing Profile' };
+                    this.state.currentActivity = { moduleId: null, modId: null, moduleTitle: null, step: 'Viewing Profile' };
                 } else if (view === 'about') {
-                    this.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Viewing About Us' };
+                    this.state.currentActivity = { moduleId: null, modId: null, moduleTitle: null, step: 'Viewing About Us' };
                 }
 
                 this.render();
@@ -2250,7 +2251,7 @@
                                             localStorage.setItem('lumina_uid', res.user.userId);
                                             app.state.loginTime = res.loginTime || new Date().toISOString();
                                             localStorage.setItem('lumina_loginTime', app.state.loginTime);
-                                            app.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Browsing' };
+                                            app.state.currentActivity = { moduleId: null, modId: null, moduleTitle: null, step: 'Browsing' };
 
                                             const toggleBtn = document.getElementById('modeToggleBtn');
                                             if (toggleBtn) toggleBtn.classList.remove('hidden');
@@ -3054,11 +3055,32 @@
                                 </button>
                             `;
                     } else {
-                        const canRetake = (app.state.data.settings['pref_allow_retake'] !== 'false');
-                        const score = (prog.score !== null && prog.score !== "" && !isNaN(prog.score)) ? Number(prog.score) : null;
-                        const attempts = Number(prog.attempts || 0);
-
-                        if (score !== null) {
+                        if (attempts >= 2) {
+                            const isPassing = score !== null && score >= 80;
+                            let scoreHtml = '';
+                            if (score !== null) {
+                                scoreHtml = `
+                                    <div class="bg-white rounded-xl p-4 border ${isPassing ? 'border-green-200 shadow-green-100' : 'border-amber-200 shadow-amber-100'} shadow-sm mb-4 flex items-center justify-between">
+                                        <div>
+                                            <div class="text-xs font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'} uppercase tracking-wide">
+                                                ${isPassing ? 'Completed' : 'Latest Result'}
+                                            </div>
+                                            <div class="font-bold text-slate-800 text-lg">${app.state.studentInfo ? app.state.studentInfo.name : 'You'}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%</div>
+                                            <div class="text-[10px] text-slate-400 mt-1">${prog.timestamp ? new Date(prog.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                            quizContent = `
+                                ${scoreHtml}
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                    <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Maximum Attempts Reached</p>
+                                </div>
+                            `;
+                        } else if (score !== null) {
                             const isPassing = score >= 80;
                             const hasRetakeLeft = attempts < 2 && canRetake && !isPassing;
 
@@ -3085,12 +3107,6 @@
                                     <button onclick="app.handlers.startQuiz('${m.id}')" class="w-full bg-amber-500 py-3 rounded-xl text-white font-bold shadow-lg shadow-amber-500/30 hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
                                         <i class="ph-bold ph-arrow-counter-clockwise"></i> Try Again (Final Attempt)
                                     </button>
-                                `;
-                            } else if (!isPassing && attempts >= 2) {
-                                quizContent += `
-                                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
-                                        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Maximum Attempts Reached</p>
-                                    </div>
                                 `;
                             } else if (!isPassing && !canRetake) {
                                 quizContent += `
@@ -4485,7 +4501,7 @@
                         app.confirm("Are you SURE you want to delete this module? This action cannot be undone.", async () => {
                             // REDIRECT IMMEDIATELY
                             app.state.view = 'dashboard';
-                            app.state.currentActivity = { moduleId: null, moduleTitle: null, step: 'Browsing' };
+                            app.state.currentActivity = { moduleId: null, modId: null, moduleTitle: null, step: 'Browsing' };
                             app.state.activeReaderModId = null;
                             
                             // TRACK DELETION STATE
@@ -6020,6 +6036,7 @@
                     const stepLabel = type === 'content' ? 'Content' : 'Activity';
                     app.state.currentActivity = {
                         moduleId: modId,
+                        modId: modId,
                         moduleTitle: mod ? mod.title : modId,
                         step: stepLabel
                     };
@@ -6621,6 +6638,7 @@
                     // Track quiz activity for teacher monitoring
                     app.state.currentActivity = {
                         moduleId: modId,
+                        modId: modId,
                         moduleTitle: mod ? mod.title : modId,
                         step: 'Quiz'
                     };
@@ -6676,15 +6694,23 @@
                             section: fd.get('section').toString().toUpperCase().trim()
                         };
 
-                        // IMMEDIATE ATTEMPT INCREMENT (Airtight)
-                        BackEndService.call('incrementAttempt', [app.state.userId, modId]);
+                        // SECURE IMMEDIATE ATTEMPT INCREMENT
+                        try {
+                            const res = await BackEndService.call('incrementAttempt', [app.state.userId, modId]);
+                            const newAttempts = res && res.attempts ? Number(res.attempts) : 1;
 
-                        // Update local state attempts to prevent double-click or reload bypass
-                        if (!app.state.data.progress[app.state.userId]) app.state.data.progress[app.state.userId] = {};
-                        if (!app.state.data.progress[app.state.userId][modId]) {
-                            app.state.data.progress[app.state.userId][modId] = { score: null, attempts: 1 };
-                        } else {
-                            app.state.data.progress[app.state.userId][modId].attempts = (Number(app.state.data.progress[app.state.userId][modId].attempts) || 0) + 1;
+                            // Update local state attempts
+                            if (!app.state.data.progress[app.state.userId]) app.state.data.progress[app.state.userId] = {};
+                            if (!app.state.data.progress[app.state.userId][modId]) {
+                                app.state.data.progress[app.state.userId][modId] = { score: null, attempts: newAttempts };
+                            } else {
+                                app.state.data.progress[app.state.userId][modId].attempts = newAttempts;
+                            }
+                        } catch (err) {
+                            app.showToast(err.message || String(err) || "Failed to start: Maximum attempts reached or passing score achieved.", "error");
+                            btn.disabled = false;
+                            btn.innerHTML = `Start ${modType} <i class="ph-bold ph-lightning ml-2"></i>`;
+                            return;
                         }
 
                         if (!app.state.studentInfo) {
@@ -7092,6 +7118,7 @@
 
                     app.state.currentActivity = {
                         moduleId: modId,
+                        modId: modId,
                         moduleTitle: mod ? mod.title : modId,
                         step: 'Quiz'
                     };
@@ -7196,12 +7223,6 @@
 
                                         app.refreshData();
 
-                                        // Hidden second chance retry button for scores < 80
-                                        let retryBtn = '';
-                                        if (finalScore < 80) {
-                                            retryBtn = `<button onclick="app.handlers.startQuiz('${modId}')" class="w-full bg-transparent text-slate-300 py-2 rounded-xl font-bold hover:bg-slate-50 hover:text-slate-500 transition-all mb-2 border border-transparent hover:border-slate-200">Retry Question Pack</button>`;
-                                        }
-
                                         modal.innerHTML = `
                                                 <div class="bg-white w-full max-w-sm rounded-2xl p-6 text-center animate-[scaleIn_0.3s_ease]">
                                                     <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
@@ -7209,7 +7230,6 @@
                                                     </div>
                                                     <h3 class="text-xl font-bold text-slate-800">${modType} Complete!</h3>
                                                     <p class="text-slate-500 mb-6">You scored <span class="text-green-600 font-bold text-lg">${finalScore}%</span></p>
-                                                    ${retryBtn}
                                                     <button onclick="document.getElementById('modal-overlay').classList.add('hidden'); app.render(); fireConfetti();" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">
                                                         See Leaderboard
                                                     </button>
