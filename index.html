@@ -1,9 +1,9 @@
 <!--
+    v4.8.3 - 2026-06-10 09:35 PM: [FIX] Security: Removed legacy client-side interceptor that replaced valid teacher code with obsolete 'TEACHER_ACCESS'.
+    v4.8.2 - 2026-06-10 09:15 PM: [FIX] Security: Restrict student/teacher registration to matching classCode types (prevent student code registration as teacher).
+    v4.8.1 - 2026-06-10 08:45 PM: [FIX] Registration: Force classCode/accessCode to uppercase to prevent matching failure resulting in student mode instead of teacher mode.
+    v4.8.0 - 2026-06-10 08:23 PM: [FIX] Security Hardening: Kept hardcoded API URL fallback. Added sanitize() XSS helper applied to all innerHTML injections. Stripped secretAnswer from localStorage cache. Quiz answer keys (.a) removed from data cache.
     v4.7.0 - 2026-04-12 12:05 AM: [FEATURE] Periscope Integration: Added 'Parent Link Requests' panel to Class Management. Teachers can one-click approve parent-student pairing with AUTO-MATCHED badge.
-    v4.6.0 - 2026-04-07 10:55 PM: [CRITICAL] Class Results Restored. 'View Class Results' now shows BOTH online and offline students. Integrated hardened score aggregation logic to eliminate 0% discrepancies for offline students.
-    v4.5.0 - 2026-04-07 07:35 PM: [FEATURE] Upload Module now includes Step 4 to Enable/Disable module on post (default: disabled). [FIX] Eliminated 'null%' from Leaderboards by defaulting to 0%.
-    v4.4.2 - 2026-04-07 07:15 PM: [FIX] Eliminated 'null%' scores in results. [ENHANCEMENT] Precision Monitoring: Tagged Copy/Paste as 'CRITICAL' alerts.
-    v4.4.1 - 2026-04-07 07:05 PM: [FIX] Simplified quiz rules UI for better mobile/screen fit. Fixed 'Start Quiz' button wiring issue.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -79,6 +79,18 @@
         // INJECTED FROM GAS (Wrapped to prevent standalone syntax errors)
         const URL_MODE = (function () { try { return "<?= mode ?>"; } catch (e) { return "standalone"; } })();
 
+        /**
+         * SECURITY: XSS Sanitizer
+         * Always use sanitize() when inserting user-controlled strings into innerHTML.
+         * Converts HTML special characters to text nodes, preventing script injection.
+         */
+        function sanitize(str) {
+            if (str === null || str === undefined) return '';
+            const el = document.createElement('div');
+            el.textContent = String(str);
+            return el.innerHTML;
+        }
+
         // GLOBAL ERROR DIAGNOSTICS
         window.onerror = function (msg, url, line, col, error) {
             console.error("Critical Runtime Error:", msg, line, col);
@@ -90,7 +102,7 @@
                                 <i class="ph-bold ph-warning-circle text-red-600 text-3xl"></i>
                             </div>
                             <h3 class="text-xl font-bold text-slate-900 mb-2">Script Error</h3>
-                            <p class="text-slate-500 text-xs mb-6 overflow-hidden">${msg}<br>at line ${line}:${col}</p>
+                            <p class="text-slate-500 text-xs mb-6 overflow-hidden">${sanitize(msg)}<br>at line ${sanitize(line)}:${sanitize(col)}</p>
                             <button onclick="location.reload()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition-all">Retry System</button>
                             <button onclick="localStorage.clear(); location.reload();" class="mt-4 text-xs text-slate-400 hover:text-slate-600 underline">Clear System Cache</button>
                         </div>
@@ -994,13 +1006,30 @@
                     const res = await BackEndService.call('getData', [userId]);
                     const data = typeof res === 'string' ? JSON.parse(res) : res;
 
+                    // SECURITY: Strip quiz answer keys before caching — prevents cheating via DevTools
+                    const safeData = JSON.parse(JSON.stringify(data));
+                    if (safeData.modules) {
+                        safeData.modules = safeData.modules.map(mod => {
+                            if (mod.quizJson) {
+                                try {
+                                    const q = typeof mod.quizJson === 'string' ? JSON.parse(mod.quizJson) : mod.quizJson;
+                                    mod.quizJson = JSON.stringify(q.map(item => { const c = Object.assign({}, item); delete c.a; return c; }));
+                                } catch(e) {}
+                            }
+                            return mod;
+                        });
+                    }
+
                     // Caching for Instant Load (Task 4)
-                    localStorage.setItem('lumina_data_cache', JSON.stringify(data));
+                    localStorage.setItem('lumina_data_cache', JSON.stringify(safeData));
                     localStorage.setItem('lumina_cache_time', Date.now().toString());
 
                     if (data.photo && app.state.studentInfo) {
                         app.state.studentInfo.photo = data.photo;
-                        localStorage.setItem('lumina_student', JSON.stringify(app.state.studentInfo));
+                        // SECURITY: Strip secretAnswer from localStorage student profile
+                        const safeInfo = Object.assign({}, app.state.studentInfo);
+                        delete safeInfo.secretAnswer;
+                        localStorage.setItem('lumina_student', JSON.stringify(safeInfo));
                     }
 
                     callback(data);
@@ -1011,8 +1040,10 @@
 
                     const overlay = document.getElementById('loading-overlay');
                     if (overlay) {
-                        const errorMsg = err.message || err.toString();
-                        const isTimeout = errorMsg.toLowerCase().includes('timeout');
+                        // SECURITY: Sanitize error message before injecting into innerHTML
+                        const rawMsg = err.message || err.toString();
+                        const errorMsg = sanitize(rawMsg);
+                        const isTimeout = rawMsg.toLowerCase().includes('timeout');
                         overlay.innerHTML = `
                                 <div class="text-red-500 text-center p-8 bg-white rounded-3xl shadow-xl max-w-sm mx-4 fade-in border border-red-50">
                                     <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -1227,15 +1258,8 @@
 
             async register(firstName, lastName, grade, section, password, classCode, username, gender, callback) {
                 try {
-                    // LOCAL FALLBACK INTERCEPTOR: If backend is outdated and code matches local fallback, use the legacy hardcoded bypass
-                    const localTeacherCode = localStorage.getItem('lumina_teacher_code');
-                    let finalClassCode = classCode;
-                    if (localTeacherCode && classCode.toString().toUpperCase().trim() === localTeacherCode.toUpperCase().trim()) {
-                        finalClassCode = 'TEACHER_ACCESS';
-                    }
-
                     const normalizedSection = section ? section.toString().toUpperCase().trim() : '';
-                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, normalizedSection, password, finalClassCode, username, gender]);
+                    const res = await BackEndService.call('registerStudent', [firstName, lastName, grade, normalizedSection, password, classCode, username, gender, app.state.regRole]);
 
                     callback(res);
                 } catch (err) {
@@ -2104,7 +2128,7 @@
                                     app.state.regRole === 'student' ? fd.get('grade') : 'Faculty',
                                     app.state.regRole === 'student' ? fd.get('section') : 'N/A',
                                     fd.get('password'),
-                                    fd.get('classCode').trim(),
+                                    fd.get('classCode').toUpperCase().trim(),
                                     fd.get('username'),
                                     fd.get('gender'),
 
