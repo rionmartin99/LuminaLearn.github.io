@@ -1,9 +1,9 @@
 <!--
+    v4.8.9 - 2026-06-12 09:15 AM: [FEATURE] Quiz Score: Displayed student's actual score/points alongside their percentage score in the quiz results, leaderboard cards, and profile lists.
     v4.8.8 - 2026-06-12 07:25 AM: [FIX] Student View: Fixed moduleView by defining score, attempts, and canRetake, handled empty quizzes dynamically, and updated module completion logic.
     v4.8.7 - 2026-06-10 10:40 PM: [FIX] Monitoring: Reduced heartbeat snapshots count to 2 on frontend to prevent payload exceeding Sheets cell limit.
     v4.8.6 - 2026-06-10 10:30 PM: [FIX] Monitoring: Prevented duplicate sync calls in MonitorService.stop to eliminate concurrency issues.
     v4.8.5 - 2026-06-10 10:20 PM: [FIX] Monitoring: Added modId property to currentActivity objects to align with backend and resolved stats object property initialization in MonitorService.
-    v4.8.4 - 2026-06-10 10:10 PM: [FIX] Quiz Attempts: Removed Retry button from Quiz Complete modal, checked backend attempt count before quiz start, and enforced 2-attempt max or >= 80% passing block in UI.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v4.8.8</title>
+    <title>Lumina v4.8.9</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -2737,7 +2737,15 @@
                         }
 
                         let badgeColor = isComplete ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600';
-                        let badgeText = isComplete ? `${prog.score}%` : 'In Progress';
+                        let badgeText = 'In Progress';
+                        if (isComplete) {
+                            if (hasQuiz) {
+                                const cardPoints = prog.points || '';
+                                badgeText = `${prog.score}%${cardPoints ? ` (${cardPoints})` : ''}`;
+                            } else {
+                                badgeText = 'Completed';
+                            }
+                        }
                         if (!prog.content && !prog.app) { badgeText = 'Not Started'; }
 
                         // Status Indicators for Teachers or Students
@@ -2825,6 +2833,8 @@
                     const score = prog.score !== undefined ? prog.score : null;
                     const attempts = prog.attempts || 0;
                     const canRetake = (app.state.data.settings && app.state.data.settings['pref_allow_retake']) !== 'false';
+                    const pointsDisplay = prog.points || (score !== null && m.quiz && m.quiz.length > 0 ? (Math.round((score / 100) * m.quiz.length) + '/' + m.quiz.length) : '');
+                    const pointsHtml = pointsDisplay ? `<span class="text-sm font-normal text-slate-500 dark:text-slate-400 ml-1">(${pointsDisplay})</span>` : '';
 
                     const isTeacherMode = app.state.userMode === 'teacher';
                     const showTeacherUI = isTeacherMode && !app.state.viewAsStudent;
@@ -3064,12 +3074,14 @@
                                 'bg-brand-50 text-brand-700 border-brand-100',
                                 'bg-brand-50 text-brand-700 border-brand-100'
                             ];
+                            const pPointsDisplay = p.points || '';
                             return `
                                                 <div class="flex flex-col items-center p-2 rounded-xl border ${colors[idx] || 'bg-white border-slate-100'}">
                                                     <div class="text-xl mb-1">${medals[idx] || ''}</div>
                                                     <div class="text-[9px] font-bold uppercase tracking-wider opacity-60">Rank ${idx + 1}</div>
                                                     <div class="font-bold text-[11px] truncate w-full text-center">${p.name}</div>
                                                     <div class="text-[11px] font-mono font-bold mt-1">${(p.score || 0)}%</div>
+                                                    ${pPointsDisplay ? `<div class="text-[9px] text-slate-500 font-bold font-mono">(${pPointsDisplay})</div>` : ''}
                                                 </div>
                                             `;
                         }).join('')}
@@ -3109,7 +3121,7 @@
                                             <div class="font-bold text-slate-800 text-lg">${app.state.studentInfo ? app.state.studentInfo.name : 'You'}</div>
                                         </div>
                                         <div class="text-right">
-                                            <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%</div>
+                                            <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%${pointsHtml}</div>
                                             <div class="text-[10px] text-slate-400 mt-1">${prog.timestamp ? new Date(prog.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                                         </div>
                                     </div>
@@ -3134,7 +3146,7 @@
                                         <div class="font-bold text-slate-800 text-lg">${app.state.studentInfo ? app.state.studentInfo.name : 'You'}</div>
                                     </div>
                                     <div class="text-right">
-                                        <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%</div>
+                                        <div class="text-2xl font-bold ${isPassing ? 'text-green-600' : 'text-amber-600'}">${score}%${pointsHtml}</div>
                                         <div class="text-[10px] text-slate-400 mt-1">${prog.timestamp ? new Date(prog.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                                     </div>
                                 </div>
@@ -3772,15 +3784,19 @@
                                     return;
                                 }
 
-                                listEl.innerHTML = filtered.map(p => `
+                                listEl.innerHTML = filtered.map(p => {
+                                    const profilePointsDisplay = p.points || '';
+                                    const profileScoreText = p.score !== null ? `${p.score}%${profilePointsDisplay ? ` (${profilePointsDisplay})` : ''}` : (p.points || 'Done');
+                                    return `
                                         <div class="flex items-center justify-between py-2 px-1 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                             <div class="flex-1 min-w-0">
                                                 <p class="text-sm font-bold text-slate-800 truncate">${p.moduleTitle || 'Untitled Module'}</p>
                                                 <p class="text-[10px] text-slate-400 uppercase font-bold">${p.subject || 'General'}</p>
                                             </div>
-                                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">${p.score !== null ? p.score + '%' : (p.points || 'Done')}</span>
+                                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">${profileScoreText}</span>
                                         </div>
-                                    `).join('');
+                                    `;
+                                }).join('');
                             } else {
                                 listEl.innerHTML = '<p class="text-xs text-slate-400 italic py-2">No completed modules yet.</p>';
                             }
