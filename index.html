@@ -1,9 +1,9 @@
 <!--
+    v4.9.0 - 2026-06-12 04:10 PM: [FIX] Start Quiz: Added client-side fallback when incrementAttempt API is not found or fails.
     v4.8.9 - 2026-06-12 09:15 AM: [FEATURE] Quiz Score: Displayed student's actual score/points alongside their percentage score in the quiz results, leaderboard cards, and profile lists.
     v4.8.8 - 2026-06-12 07:25 AM: [FIX] Student View: Fixed moduleView by defining score, attempts, and canRetake, handled empty quizzes dynamically, and updated module completion logic.
     v4.8.7 - 2026-06-10 10:40 PM: [FIX] Monitoring: Reduced heartbeat snapshots count to 2 on frontend to prevent payload exceeding Sheets cell limit.
     v4.8.6 - 2026-06-10 10:30 PM: [FIX] Monitoring: Prevented duplicate sync calls in MonitorService.stop to eliminate concurrency issues.
-    v4.8.5 - 2026-06-10 10:20 PM: [FIX] Monitoring: Added modId property to currentActivity objects to align with backend and resolved stats object property initialization in MonitorService.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v4.8.9</title>
+    <title>Lumina v4.9.0</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -6788,10 +6788,28 @@
                                 app.state.data.progress[app.state.userId][modId].attempts = newAttempts;
                             }
                         } catch (err) {
-                            app.showToast(err.message || String(err) || "Failed to start: Maximum attempts reached or passing score achieved.", "error");
-                            btn.disabled = false;
-                            btn.innerHTML = `Start ${modType} <i class="ph-bold ph-lightning ml-2"></i>`;
-                            return;
+                            const errMsg = err?.message || err?.error || String(err);
+                            if (errMsg.includes('incrementAttempt') && errMsg.includes('not found')) {
+                                console.warn("incrementAttempt backend API is not found. Proceeding with client-side fallback. Please redeploy your Google Apps Script Web App.");
+                                
+                                // Fallback: try to deduce attempts from existing progress, or default to 1
+                                let currentAttempts = 0;
+                                if (app.state.data.progress[app.state.userId] && app.state.data.progress[app.state.userId][modId]) {
+                                    currentAttempts = Number(app.state.data.progress[app.state.userId][modId].attempts || 0);
+                                }
+                                const newAttempts = currentAttempts + 1;
+                                if (!app.state.data.progress[app.state.userId]) app.state.data.progress[app.state.userId] = {};
+                                if (!app.state.data.progress[app.state.userId][modId]) {
+                                    app.state.data.progress[app.state.userId][modId] = { score: null, attempts: newAttempts };
+                                } else {
+                                    app.state.data.progress[app.state.userId][modId].attempts = newAttempts;
+                                }
+                            } else {
+                                app.showToast(errMsg || "Failed to start: Maximum attempts reached or passing score achieved.", "error");
+                                btn.disabled = false;
+                                btn.innerHTML = `Start ${modType} <i class="ph-bold ph-lightning ml-2"></i>`;
+                                return;
+                            }
                         }
 
                         if (!app.state.studentInfo) {
