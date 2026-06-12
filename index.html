@@ -1,9 +1,9 @@
 <!--
+    v4.9.1 - 2026-06-12 06:41 PM: [FIX] Teacher Student View: Fixed module rendering when viewing as student by resolving undefined studentInfo grade filter.
     v4.9.0 - 2026-06-12 04:10 PM: [FIX] Start Quiz: Added client-side fallback when incrementAttempt API is not found or fails.
     v4.8.9 - 2026-06-12 09:15 AM: [FEATURE] Quiz Score: Displayed student's actual score/points alongside their percentage score in the quiz results, leaderboard cards, and profile lists.
     v4.8.8 - 2026-06-12 07:25 AM: [FIX] Student View: Fixed moduleView by defining score, attempts, and canRetake, handled empty quizzes dynamically, and updated module completion logic.
     v4.8.7 - 2026-06-10 10:40 PM: [FIX] Monitoring: Reduced heartbeat snapshots count to 2 on frontend to prevent payload exceeding Sheets cell limit.
-    v4.8.6 - 2026-06-10 10:30 PM: [FIX] Monitoring: Prevented duplicate sync calls in MonitorService.stop to eliminate concurrency issues.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v4.9.0</title>
+    <title>Lumina v4.9.1</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -2636,9 +2636,10 @@
                     // Dynamic Subject Filter: For students, only show subjects available in their Grade
                     let subjects = ['All', ...(app.state.data.subjects || [])];
                     if (!isTeacher || app.state.viewAsStudent) {
-                        const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : 'All';
+                        const rawGrade = app.state.studentInfo && app.state.studentInfo.grade && app.state.studentInfo.grade !== 'undefined' ? String(app.state.studentInfo.grade) : null;
+                        const studentGrade = rawGrade || (app.state.activeFilter.grade !== 'All' ? String(app.state.activeFilter.grade) : null);
                         const availableSubjects = (app.state.data.modules || [])
-                            .filter(m => String(m.grade) === studentGrade)
+                            .filter(m => !studentGrade || String(m.grade) === studentGrade)
                             .map(m => m.subject);
                         subjects = ['All', ...[...new Set(availableSubjects)].sort()];
                     }
@@ -2665,7 +2666,8 @@
                         // Grade matching: Hard-lock for students to their assigned grade
                         let gMatch = false;
                         if (!isTeacher || app.state.viewAsStudent) {
-                            const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : null;
+                            const rawGrade = app.state.studentInfo && app.state.studentInfo.grade && app.state.studentInfo.grade !== 'undefined' ? String(app.state.studentInfo.grade) : null;
+                            const studentGrade = rawGrade || (app.state.activeFilter.grade !== 'All' ? String(app.state.activeFilter.grade) : null);
                             gMatch = studentGrade ? (String(m.grade) === studentGrade) : true;
                         } else {
                             gMatch = (app.state.activeFilter.grade === 'All' || String(m.grade) === String(app.state.activeFilter.grade));
@@ -3776,7 +3778,7 @@
                             if (!listEl) return;
                             if (res.success && res.progress && res.progress.length > 0) {
                                 // Filter by student's current grade for clarity
-                                const studentGrade = app.state.studentInfo ? String(app.state.studentInfo.grade) : 'All';
+                                const studentGrade = (app.state.studentInfo && app.state.studentInfo.grade && app.state.studentInfo.grade !== 'undefined') ? String(app.state.studentInfo.grade) : 'All';
                                 const filtered = res.progress.filter(p => !p.grade || String(p.grade) === studentGrade);
 
                                 if (filtered.length === 0) {
