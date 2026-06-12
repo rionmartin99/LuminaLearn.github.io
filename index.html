@@ -1,9 +1,9 @@
 <!--
+    v4.8.8 - 2026-06-12 07:25 AM: [FIX] Student View: Fixed moduleView by defining score, attempts, and canRetake, handled empty quizzes dynamically, and updated module completion logic.
     v4.8.7 - 2026-06-10 10:40 PM: [FIX] Monitoring: Reduced heartbeat snapshots count to 2 on frontend to prevent payload exceeding Sheets cell limit.
     v4.8.6 - 2026-06-10 10:30 PM: [FIX] Monitoring: Prevented duplicate sync calls in MonitorService.stop to eliminate concurrency issues.
     v4.8.5 - 2026-06-10 10:20 PM: [FIX] Monitoring: Added modId property to currentActivity objects to align with backend and resolved stats object property initialization in MonitorService.
     v4.8.4 - 2026-06-10 10:10 PM: [FIX] Quiz Attempts: Removed Retry button from Quiz Complete modal, checked backend attempt count before quiz start, and enforced 2-attempt max or >= 80% passing block in UI.
-    v4.8.3 - 2026-06-10 09:35 PM: [FIX] Security: Removed legacy client-side interceptor that replaced valid teacher code with obsolete 'TEACHER_ACCESS'.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lumina v4.2.2</title>
+    <title>Lumina v4.8.8</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1016,10 +1016,9 @@
                     const safeData = JSON.parse(JSON.stringify(data));
                     if (safeData.modules) {
                         safeData.modules = safeData.modules.map(mod => {
-                            if (mod.quizJson) {
+                            if (mod.quiz) {
                                 try {
-                                    const q = typeof mod.quizJson === 'string' ? JSON.parse(mod.quizJson) : mod.quizJson;
-                                    mod.quizJson = JSON.stringify(q.map(item => { const c = Object.assign({}, item); delete c.a; return c; }));
+                                    mod.quiz = mod.quiz.map(item => { const c = Object.assign({}, item); delete c.a; return c; });
                                 } catch(e) {}
                             }
                             return mod;
@@ -2688,7 +2687,22 @@
                         const userProg = allProg[app.state.userId] || {}; // Get progress for this unique session ID
                         const prog = userProg[m.id] || { content: false, app: false, score: null };
 
-                        const isComplete = prog.score !== null;
+                        const hasContent = !!m.contentId;
+                        const hasApp = !!m.appId;
+                        const hasQuiz = m.quiz && m.quiz.length > 0;
+                        const contentDone = !hasContent || prog.content === true || prog.content === 'true';
+                        const appDone = !hasApp || (prog.app === true || prog.app === 'true' || prog.app === 'completed' || (prog.appGrade !== null && prog.appGrade !== undefined));
+                        const quizDone = !hasQuiz || (prog.score !== null && prog.score !== undefined);
+                        const isComplete = contentDone && appDone && quizDone;
+                        const progressPercent = (function() {
+                            let total = 0;
+                            let done = 0;
+                            if (hasContent) { total++; if (contentDone && prog.content) done++; }
+                            if (hasApp) { total++; if (appDone && prog.app) done++; }
+                            if (hasQuiz) { total++; if (quizDone && prog.score !== null) done++; }
+                            return total > 0 ? Math.round((done / total) * 100) : 100;
+                        })();
+
                         const gc = app.utils.getGradeTheme(m.grade);
 
                         // Check Expiration / Active
@@ -2767,7 +2781,7 @@
                                 ${timerHtml}
                                 <div class="flex items-center gap-1 mt-auto">
                                     <div class="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                        <div class="h-full ${isComplete ? 'bg-green-500' : gc.bar}" style="width: ${isComplete ? '100%' : (prog.app ? '66%' : (prog.content ? '33%' : '0%'))}"></div>
+                                        <div class="h-full ${isComplete ? 'bg-green-500' : gc.bar}" style="width: ${progressPercent}%"></div>
                                     </div>
                                     <i class="ph-bold ${lockedState ? 'ph-lock' : 'ph-caret-right'} ${lockedState ? 'text-slate-400' : gc.icon}"></i>
                                 </div>
@@ -2795,9 +2809,22 @@
 
                 moduleView(id) {
                     const m = app.state.data.modules.find(mod => mod.id === id);
+                    if (!m) {
+                        const errorPage = document.createElement('div');
+                        errorPage.className = "p-8 text-center text-red-500";
+                        errorPage.innerHTML = `
+                            <i class="ph-bold ph-warning-octagon text-4xl mb-2"></i>
+                            <p class="font-bold">Module not found or access denied.</p>
+                            <button onclick="app.navigate('dashboard')" class="mt-4 bg-brand-500 text-white font-bold py-2 px-4 rounded-xl">Back to Dashboard</button>
+                        `;
+                        return errorPage;
+                    }
                     const allProg = app.state.data.progress || {};
                     const userProg = allProg[app.state.userId] || {};
                     const prog = userProg[id] || { content: false, app: false, score: null };
+                    const score = prog.score !== undefined ? prog.score : null;
+                    const attempts = prog.attempts || 0;
+                    const canRetake = (app.state.data.settings && app.state.data.settings['pref_allow_retake']) !== 'false';
 
                     const isTeacherMode = app.state.userMode === 'teacher';
                     const showTeacherUI = isTeacherMode && !app.state.viewAsStudent;
@@ -3005,9 +3032,10 @@
                     // STEP 3: ASSESSMENT
                     const step3 = document.createElement('div');
                     const modType = m.modType || 'Quiz';
+                    const hasQuiz = m.quiz && m.quiz.length > 0;
                     // Unlock if all prerequisites are met, skipping empty steps
                     const locked3 = ((hasContent && !prog.content) || (hasApp && !isAppDone && !isAppPending)) && !isTeacherMode;
-                    step3.className = `p-5 rounded-2xl border transition-all ${locked3 ? 'border-slate-100 locked-pattern opacity-70' : 'border-accent-200 bg-orange-50/30 shadow-soft'}`;
+                    step3.className = `p-5 rounded-2xl border transition-all ${locked3 || !hasQuiz ? 'border-slate-100 locked-pattern opacity-70' : 'border-accent-200 bg-orange-50/30 shadow-soft'}`;
 
                     // 1. Calculate Leaderboard
                     const leaderboard = [];
@@ -3053,7 +3081,14 @@
                     // 3. Quiz Content
                     let quizContent = '';
 
-                    if (showTeacherUI) {
+                    if (!hasQuiz) {
+                        quizContent = `
+                                <p class="text-sm text-slate-600 mb-4">The teacher has not uploaded any quiz for this module.</p>
+                                <button disabled class="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed">
+                                    <i class="ph-bold ph-prohibit"></i> No Quiz Provided
+                                </button>
+                            `;
+                    } else if (showTeacherUI) {
                         quizContent = `
                                 <p class="text-sm text-slate-600 mb-4">View the results of all students who have taken this ${modType.toLowerCase()}.</p>
                                 <button onclick="app.components.showModuleScores('${m.id}')" class="w-full bg-slate-900 py-3 rounded-xl text-white font-bold shadow-lg hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
@@ -3132,11 +3167,14 @@
                     }
 
                     step3.innerHTML = `
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-8 h-8 rounded-full ${locked3 ? 'bg-slate-200 text-slate-400' : 'bg-accent-100 text-accent-600'} flex items-center justify-center font-bold">
-                                    ${locked3 ? '<i class="ph-bold ph-lock"></i>' : '3'}
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full ${locked3 || !hasQuiz ? 'bg-slate-200 text-slate-400' : 'bg-accent-100 text-accent-600'} flex items-center justify-center font-bold">
+                                        ${locked3 ? '<i class="ph-bold ph-lock"></i>' : '3'}
+                                    </div>
+                                    <h3 class="font-bold text-slate-800">${modType} Assessment</h3>
                                 </div>
-                                <h3 class="font-bold text-slate-800">${modType} Assessment</h3>
+                                ${!hasQuiz ? '<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">Empty</span>' : ''}
                             </div>
                             ${quizContent}
                             ${leaderboardHtml}
@@ -4876,6 +4914,27 @@
                                     <tbody class="divide-y divide-slate-100">
                                         ${students.map(s => {
                                             const isHighRisk = s.isHighRisk;
+                                            
+                                            // Dynamic progress calculation based on what components exist
+                                            const hasContent = !!m.contentId;
+                                            const hasApp = !!m.appId;
+                                            const hasQuiz = m.quiz && m.quiz.length > 0;
+                                            
+                                            const contentDone = !hasContent || s.content === true || s.content === 'true';
+                                            const appDone = !hasApp || (s.app === true || s.app === 'true' || s.app === 'completed' || (s.appGrade !== null && s.appGrade !== undefined));
+                                            const quizDone = !hasQuiz || (s.score !== null && s.score !== undefined);
+
+                                            const isDone = contentDone && appDone && quizDone;
+                                            const progressPercent = (function() {
+                                                let total = 0;
+                                                let done = 0;
+                                                if (hasContent) { total++; if (contentDone && s.content) done++; }
+                                                if (hasApp) { total++; if (appDone && s.app) done++; }
+                                                if (hasQuiz) { total++; if (quizDone && s.score !== null) done++; }
+                                                return total > 0 ? Math.round((done / total) * 100) : 100;
+                                            })();
+                                            
+                                            const progressLabel = isDone ? 'DONE' : (hasApp && s.app ? 'APP' : (hasContent && s.content ? 'READ' : 'START'));
                                             return `
                                                 <tr class="hover:bg-slate-50/80 transition-colors">
                                                     <td class="p-4">
@@ -4897,9 +4956,9 @@
                                                 <td class="p-4">
                                                     <div class="flex items-center gap-2">
                                                         <div class="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div class="h-full ${s.score !== null ? 'bg-green-500' : 'bg-brand-500'}" style="width: ${s.score !== null ? '100%' : (s.app ? '66%' : (s.content ? '33%' : '0%'))}"></div>
+                                                            <div class="h-full ${isDone ? 'bg-green-500' : 'bg-brand-500'}" style="width: ${progressPercent}%"></div>
                                                         </div>
-                                                        <span class="text-[10px] font-black text-slate-600">${s.score !== null ? 'DONE' : (s.app ? 'APP' : (s.content ? 'READ' : 'START'))}</span>
+                                                        <span class="text-[10px] font-black text-slate-600">${progressLabel}</span>
                                                     </div>
                                                 </td>
                                                 <td class="p-4 text-center">
